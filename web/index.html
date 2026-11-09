@@ -1,0 +1,1953 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="darkreader-lock">
+<meta name="color-scheme" content="dark">
+<title>Revenant</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<style>
+:root {
+  --night: #07040f;
+  --night2: #120726;
+  --pink: #ff2bd6;
+  --cyan: #19f2ff;
+  --amber: #ff9f1c;
+  --violet: #8a6bff;
+  --text: #f4ecff;
+  --dim: #a99bc9;
+  --faint: #6f6290;
+  --glass: rgba(255, 255, 255, 0.055);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --good: #3dff8f;
+  --bad: #ff4d6d;
+  --cell: 72px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--night);
+  color: var(--text);
+  font-family: "Avenir Next", "Futura", "Century Gothic", "Trebuchet MS", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+input, select { font: inherit; color: var(--text); }
+
+/* ---------- backdrop ---------- */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  background:
+    radial-gradient(900px 520px at 78% -8%, rgba(255, 43, 214, 0.30), transparent 70%),
+    radial-gradient(800px 600px at 8% 108%, rgba(25, 242, 255, 0.20), transparent 70%),
+    radial-gradient(700px 500px at 50% 40%, rgba(138, 107, 255, 0.12), transparent 75%),
+    linear-gradient(180deg, #0a0418 0%, #120726 55%, #07040f 100%);
+}
+.floor { position: absolute; left: -60%; right: -60%; bottom: -2vh; height: 52vh;
+  background-image:
+    linear-gradient(rgba(255, 43, 214, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(25, 242, 255, 0.38) 1px, transparent 1px);
+  background-size: 64px 64px;
+  transform: perspective(380px) rotateX(64deg);
+  transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(transparent 0%, #000 70%);
+  mask-image: linear-gradient(transparent 0%, #000 70%);
+  opacity: 0.55;
+}
+.sun { position: absolute; right: 4vw; top: 17vh; width: 230px; height: 230px; border-radius: 50%;
+  background: linear-gradient(180deg, #ffe66d 0%, #ff9f1c 38%, #ff2bd6 78%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0px, #000 122.0px, transparent 122.0px 123.8px, #000 123.8px, #000 132.7px, transparent 132.7px 135.0px, #000 135.0px, #000 146.3px, transparent 146.3px 149.2px, #000 149.2px, #000 163.5px, transparent 163.5px 167.2px, #000 167.2px, #000 185.4px, transparent 185.4px 190.1px, #000 190.1px, #000 213.2px, transparent 213.2px 219.2px, #000 219.2px, #000 100%);
+  mask-image: linear-gradient(180deg, #000 0px, #000 122.0px, transparent 122.0px 123.8px, #000 123.8px, #000 132.7px, transparent 132.7px 135.0px, #000 135.0px, #000 146.3px, transparent 146.3px 149.2px, #000 149.2px, #000 163.5px, transparent 163.5px 167.2px, #000 167.2px, #000 185.4px, transparent 185.4px 190.1px, #000 190.1px, #000 213.2px, transparent 213.2px 219.2px, #000 219.2px, #000 100%);
+  filter: blur(0.4px) drop-shadow(0 0 40px rgba(255, 43, 214, 0.8));
+  opacity: 0.6;
+}
+.scan { position: fixed; inset: 0; z-index: 90; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px);
+  opacity: 0.3; }
+.vignette { position: fixed; inset: 0; z-index: 89; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%); }
+
+/* ---------- layout ---------- */
+.wrap { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; padding: 22px 20px 60px; }
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 20px; }
+.logo { margin: 0; font-weight: 800; font-size: clamp(30px, 5vw, 50px); letter-spacing: 0.2em; text-transform: uppercase; line-height: 1;
+  color: #fff6ff;
+  text-shadow: 0 0 3px #fff, 0 0 9px #ff2bd6, 0 0 20px #ff2bd6, 0 0 42px #ff2bd6, 0 0 80px #b01cff;
+  }
+.tag { margin: 8px 0 0; color: var(--cyan); letter-spacing: 0.2em; text-transform: uppercase; font-size: 10px; max-width: 560px; line-height: 1.6;
+  text-shadow: 0 0 8px rgba(25, 242, 255, 0.9), 0 0 22px rgba(25, 242, 255, 0.5); }
+@keyframes flicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: 0.82; } 94% { opacity: 1; } 96% { opacity: 0.9; } }
+.main { display: grid; grid-template-columns: 270px minmax(0, 1fr) 350px; gap: 18px; align-items: start; }
+@media (max-width: 1150px) { .main { grid-template-columns: 240px minmax(0, 1fr); } .col-right { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; } }
+@media (max-width: 760px) { .main { grid-template-columns: 1fr; } .col-right { grid-template-columns: 1fr; } .sun { opacity: 0.2; } }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+
+/* ---------- glass ---------- */
+.glass { position: relative; border-radius: 22px; padding: 16px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025) 55%), var(--glass);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 0 40px rgba(138, 107, 255, 0.07), 0 24px 50px -16px rgba(0, 0, 0, 0.85), 0 0 30px -6px rgba(255, 43, 214, 0.22); }
+.glass h2 { margin: 0 0 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--cyan);
+  text-shadow: 0 0 10px rgba(25, 242, 255, 0.8); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.glass h2 small { color: var(--faint); letter-spacing: 0.1em; text-shadow: none; font-weight: 500; text-transform: none; font-size: 11px; }
+
+.btn { border: 1px solid var(--glass-edge); border-radius: 12px; padding: 9px 14px; font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 60%), rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 14px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.18s, transform 0.12s, border-color 0.18s; }
+.btn:hover { border-color: rgba(25, 242, 255, 0.7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 18px rgba(25, 242, 255, 0.5), 0 6px 14px rgba(0, 0, 0, 0.5); }
+.btn:active { transform: translateY(1px) scale(0.98); }
+.btn.hot { border-color: rgba(255, 43, 214, 0.75); color: #ffe6fb; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 20px rgba(255, 43, 214, 0.5), 0 6px 14px rgba(0, 0, 0, 0.5); }
+.btn.hot:hover { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 28px rgba(255, 43, 214, 0.85), 0 6px 14px rgba(0, 0, 0, 0.5); }
+.btn.small { padding: 6px 10px; font-size: 11px; }
+.btn.danger:hover { border-color: var(--bad); box-shadow: 0 0 18px rgba(255, 77, 109, 0.6); }
+.btn:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+.link { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 9px; padding: 8px 14px; border-radius: 999px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--glass-edge); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.led { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+.led.on { background: var(--good); box-shadow: 0 0 10px var(--good), 0 0 22px rgba(61, 255, 143, 0.7); }
+.led.demo { background: var(--amber); box-shadow: 0 0 10px var(--amber), 0 0 22px rgba(255, 159, 28, 0.7); }
+@keyframes pulse { 50% { opacity: 0.55; } }
+.sync { font-size: 11px; color: var(--dim); letter-spacing: 0.1em; }
+.sync b { color: var(--amber); font-weight: 600; }
+
+/* ---------- devices ---------- */
+.tape { display: block; width: 100%; text-align: left; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; position: relative; overflow: hidden;
+  border: 1px solid var(--glass-edge); background: linear-gradient(100deg, rgba(255, 43, 214, 0.14), rgba(25, 242, 255, 0.06) 70%), rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 8px 16px rgba(0, 0, 0, 0.45); transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s; }
+.tape::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, var(--pink), var(--cyan)); opacity: 0.55; }
+.tape:hover { transform: translateX(3px); border-color: rgba(25, 242, 255, 0.55); }
+.tape.sel { border-color: var(--pink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 26px rgba(255, 43, 214, 0.55), 0 8px 16px rgba(0, 0, 0, 0.5); }
+.tape.sel::before { opacity: 1; box-shadow: 0 0 14px var(--pink); }
+.tape .nm { font-weight: 700; letter-spacing: 0.06em; font-size: 14px; }
+.tape .ct { color: var(--dim); font-size: 11px; letter-spacing: 0.12em; margin-top: 3px; text-transform: uppercase; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.stack > * + * { margin-top: 8px; }
+
+/* ---------- remote board ---------- */
+.boardhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.boardhead .title { font-size: 22px; font-weight: 700; letter-spacing: 0.08em; text-shadow: 0 0 14px rgba(255, 43, 214, 0.7); }
+.iconbtn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--glass-edge); background: rgba(255, 255, 255, 0.06); color: var(--dim); cursor: pointer; transition: 0.2s; }
+.iconbtn:hover { color: var(--text); border-color: rgba(25, 242, 255, 0.7); box-shadow: 0 0 14px rgba(25, 242, 255, 0.45); }
+.iconbtn.on { color: #fff; border-color: var(--pink); background: rgba(255, 43, 214, 0.28); box-shadow: 0 0 16px rgba(255, 43, 214, 0.7); }
+.rb .badge { position: absolute; top: 5px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font-style: normal; font-size: 10px; line-height: 16px; text-align: center; color: #05020d; background: #19f2ff; box-shadow: 0 0 10px #19f2ff; pointer-events: none; }
+.mp-title { font-size: 13px; margin-bottom: 8px; line-height: 1.5; }
+.mp-title b { color: #ff7ae8; text-shadow: 0 0 10px rgba(255, 43, 214, 0.7); }
+.mp-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; align-items: center; }
+.tabbox { border: 1px solid var(--glass-edge); border-radius: 14px; background: rgba(255, 255, 255, 0.04); overflow: hidden; margin-top: 6px; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; padding: 6px 6px 0; background: rgba(0, 0, 0, 0.25); border-bottom: 1px solid var(--glass-edge); scrollbar-width: thin; }
+.tab { flex: 0 0 auto; border: 1px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; background: transparent; color: var(--dim); padding: 8px 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; font-family: inherit; transition: color 0.2s, background 0.2s; margin-bottom: -1px; }
+.tab:hover { color: var(--text); }
+.tab.on { color: #fff; background: rgba(255, 255, 255, 0.07); border-color: var(--glass-edge); border-bottom: 1px solid rgba(40, 20, 70, 0.95); text-shadow: 0 0 10px rgba(255, 43, 214, 0.8); box-shadow: 0 -6px 16px -8px rgba(255, 43, 214, 0.6); }
+.tabbody { padding: 12px; margin: 0; }
+.mp-lab { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); margin-top: 12px; }
+.pw { position: relative; }
+.pw .eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--dim); cursor: pointer; }
+.pw .eye:hover, .pw .eye.on { color: #fff; text-shadow: 0 0 10px #19f2ff; }
+.switch { display: inline-flex; align-items: center; gap: 9px; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); cursor: pointer; user-select: none; }
+.switch .trk { width: 42px; height: 22px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-edge); position: relative; transition: 0.2s; }
+.switch .trk::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #cfc4ee; transition: 0.2s; }
+.switch.on { color: var(--text); }
+.switch.on .trk { background: rgba(255, 43, 214, 0.35); border-color: var(--pink); box-shadow: 0 0 14px rgba(255, 43, 214, 0.7); }
+.switch.on .trk::after { left: 22px; background: #fff; box-shadow: 0 0 10px #fff; }
+#boardWrap { display: flex; justify-content: center; padding: 8px 0 4px; }
+#board { position: relative; border-radius: 26px; padding: 0; margin: 0 auto;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.12)); box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.7), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+#board.edit { background-image: radial-gradient(circle, rgba(255, 255, 255, 0.28) 1.4px, transparent 1.6px); background-size: var(--cell) var(--cell); background-position: calc(var(--cell) / 2) calc(var(--cell) / 2); }
+.rb { position: absolute; margin: 4px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.24); padding: 4px; display: flex; align-items: center; justify-content: center; text-align: center;
+  color: #fff; font-weight: 700; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.15; overflow: hidden; word-break: break-word;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.03) 46%, rgba(0, 0, 0, 0.3)), rgba(var(--c), 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -10px 16px rgba(0, 0, 0, 0.38), 0 10px 18px rgba(0, 0, 0, 0.6), 0 0 16px rgba(var(--c), 0.4);
+  text-shadow: 0 0 9px rgba(var(--c), 1), 0 1px 2px rgba(0, 0, 0, 0.8);
+  transition: box-shadow 0.18s, transform 0.12s, border-color 0.18s; touch-action: manipulation; }
+.rb::after { content: ""; position: absolute; left: 8%; right: 8%; top: 4%; height: 38%; border-radius: 14px 14px 40% 40%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent); pointer-events: none; }
+.rb:hover { border-color: rgba(var(--c), 1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -10px 16px rgba(0, 0, 0, 0.38), 0 10px 18px rgba(0, 0, 0, 0.6), 0 0 28px rgba(var(--c), 0.85); }
+.rb:active { transform: scale(0.95); }
+.rb.fire { animation: fire 0.5s ease-out; }
+@keyframes fire { 0% { box-shadow: 0 0 0 0 rgba(var(--c), 1), 0 0 60px 14px rgba(var(--c), 1); background-color: rgba(var(--c), 0.9); } 100% { } }
+.rb.bounce { animation: bounce 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); }
+@keyframes bounce { 0% { transform: scale(1.18); } 60% { transform: scale(0.95); } 100% { transform: scale(1); } }
+#board.edit .rb { cursor: grab; touch-action: none; }
+.rb.picked { border-color: #fff; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75), 0 0 30px rgba(var(--c), 1); }
+.rb.drag-fading { opacity: 0.3; }
+.drag-clone { position: fixed; z-index: 200; pointer-events: none; margin: 0 !important; transform: scale(1.08) rotate(-2deg); box-shadow: 0 24px 40px rgba(0, 0, 0, 0.75), 0 0 36px rgba(var(--c), 1) !important; }
+.ghost { position: absolute; margin: 4px; border-radius: 18px; border: 2px dashed var(--cyan); background: rgba(25, 242, 255, 0.1); box-shadow: 0 0 20px rgba(25, 242, 255, 0.5); pointer-events: none; transition: left 0.08s, top 0.08s; }
+.ghost.bad { border-color: var(--bad); background: rgba(255, 77, 109, 0.12); box-shadow: 0 0 20px rgba(255, 77, 109, 0.5); }
+.empty { text-align: center; padding: 50px 16px; color: var(--dim); }
+.empty b { display: block; font-size: 18px; letter-spacing: 0.1em; color: var(--text); text-shadow: 0 0 14px rgba(25, 242, 255, 0.7); margin-bottom: 8px; }
+
+.inspector { margin-top: 14px; border-top: 1px solid var(--glass-edge); padding-top: 14px; }
+.inspector.hidden { display: none; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+label.f { display: flex; flex-direction: column; gap: 5px; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+input.i, select.i { background: rgba(0, 0, 0, 0.4); border: 1px solid var(--glass-edge); border-radius: 10px; padding: 8px 10px; font-size: 13px; letter-spacing: 0.04em; text-transform: none; outline: none; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6); }
+input.i:focus, select.i:focus { border-color: var(--cyan); box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 14px rgba(25, 242, 255, 0.5); }
+select.i option { background: #1a0d33; }
+
+/* ---------- monitor ---------- */
+.strip { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); margin-bottom: 12px; transition: background 0.2s, box-shadow 0.2s; }
+.strip.new { background: var(--good); box-shadow: 0 0 18px var(--good); }
+.strip.same { background: var(--amber); box-shadow: 0 0 18px var(--amber); }
+.mon-name { font-size: 26px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.mon-name.new { color: var(--good); text-shadow: 0 0 14px rgba(61, 255, 143, 0.8); }
+.mon-name.same { color: var(--amber); text-shadow: 0 0 14px rgba(255, 159, 28, 0.8); }
+.mon-name.idle { color: var(--faint); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; margin: 10px 0; }
+.kv span:nth-child(odd) { color: var(--faint); }
+canvas#wave { width: 100%; height: 54px; display: block; border-radius: 10px; background: rgba(0, 0, 0, 0.45); box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8); }
+.hist { margin: 12px 0 0; padding: 0; list-style: none; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--dim); max-height: 130px; overflow: auto; }
+.hist li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.new { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.dot.same { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
+/* ---------- library ---------- */
+.results { list-style: none; margin: 10px 0 0; padding: 0; max-height: 220px; overflow: auto; border-radius: 12px; background: rgba(0, 0, 0, 0.28); }
+.results li { padding: 8px 12px; font-size: 12px; cursor: pointer; border-bottom: 1px solid rgba(255, 255, 255, 0.06); letter-spacing: 0.03em; }
+.results li:hover, .results li.sel { background: rgba(255, 43, 214, 0.18); text-shadow: 0 0 8px rgba(255, 43, 214, 0.8); }
+.results li small { display: block; color: var(--faint); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; max-height: 140px; overflow: auto; }
+.pill { padding: 4px 9px; border-radius: 999px; font-size: 11px; border: 1px solid var(--glass-edge); background: rgba(255, 255, 255, 0.06); cursor: pointer; }
+.pill.off { opacity: 0.4; text-decoration: line-through; }
+.pill.bad { border-color: var(--bad); color: #ffb3c0; cursor: default; opacity: 0.6; }
+.note { color: var(--dim); font-size: 12px; line-height: 1.5; }
+.note b { color: var(--text); }
+
+/* ---------- modal + toast ---------- */
+.veil { position: fixed; inset: 0; z-index: 150; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(4, 1, 10, 0.72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: fadeIn 0.2s; }
+@keyframes fadeIn { from { opacity: 0; } }
+.modal { width: min(480px, 100%); max-height: 92vh; overflow: auto; position: relative; }
+.modal-x { position: absolute; top: 10px; right: 12px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--glass-edge); background: rgba(255, 255, 255, 0.06); color: var(--dim); font-size: 20px; line-height: 26px; padding: 0; cursor: pointer; transition: 0.2s; }
+.modal-x:hover { color: #fff; border-color: rgba(25, 242, 255, 0.7); box-shadow: 0 0 14px rgba(25, 242, 255, 0.5); }
+.modal h3 { margin: 0 0 12px; padding-right: 36px; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; text-shadow: 0 0 14px rgba(255, 43, 214, 0.8); }
+.waiting { text-align: center; padding: 22px 0; color: var(--cyan); letter-spacing: 0.22em; text-transform: uppercase; font-size: 13px; text-shadow: 0 0 12px rgba(25, 242, 255, 0.9); }
+#toasts { position: fixed; z-index: 300; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.toast { padding: 10px 16px; border-radius: 12px; font-size: 13px; letter-spacing: 0.05em; background: rgba(20, 8, 40, 0.9); border: 1px solid var(--glass-edge); box-shadow: 0 0 20px rgba(138, 107, 255, 0.5); animation: fadeIn 0.2s; transition: opacity 0.4s; }
+.toast.bad { border-color: var(--bad); box-shadow: 0 0 20px rgba(255, 77, 109, 0.6); }
+.toast.good { border-color: var(--good); box-shadow: 0 0 20px rgba(61, 255, 143, 0.5); }
+.toast.out { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .floor, .logo, .led, .waiting { animation: none; } }
+</style>
+</head>
+<body>
+<div class="bg"><div class="sun"></div><div class="floor"></div></div>
+<div class="vignette"></div><div class="scan"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 class="logo">Revenant</h1>
+      <p class="tag">IR Remote Router Relay Repeater &amp; Bluetooth Keyboard Adaptor</p>
+    </div>
+    <div class="link">
+      <span class="sync" id="sync"></span>
+      <span class="chip"><span class="led" id="led"></span><span id="linkText">Not Connected</span></span>
+      <button class="btn hot" id="btnConnect">Connect Revenant</button>
+      <button class="btn" id="btnDemo">Demo Mode</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="col col-left">
+      <section class="glass">
+        <h2>Devices <small id="devCount"></small></h2>
+        <div id="devList"></div>
+        <button class="btn small" id="btnAddDev">+ Add Device</button>
+      </section>
+      <section class="glass">
+        <h2>Settings File</h2>
+        <div class="stack">
+          <label class="switch" id="autoSwitch" title="Save to Revenant a moment after every change"><span class="trk"></span><span>Auto Save To Revenant</span></label>
+          <button class="btn small" id="btnSaveStick" style="width:100%">Save To Revenant</button>
+          <button class="btn small" id="btnLoadStick" style="width:100%">Load From Revenant</button>
+          <button class="btn small" id="btnDownload" style="width:100%">Download JSON</button>
+          <button class="btn small" id="btnUpload" style="width:100%">Upload JSON</button>
+          <button class="btn small danger" id="btnReset" style="width:100%">Reset To Defaults</button>
+          <input type="file" id="fileIn" accept=".json,application/json" hidden>
+        </div>
+      </section>
+      <section class="glass" id="tuneCard">
+        <h2>Learning</h2>
+        <p class="note" style="margin:0 0 10px">How forgiving Revenant is when it recognises a button. Old and worn remotes need more room.</p>
+        <div class="stack" id="tunePresets"></div>
+        <p class="note" id="tuneNote" style="margin:10px 0 0"></p>
+        <details id="tuneMore" style="margin-top:10px">
+          <summary class="mp-lab" style="cursor:pointer;margin:0">Fine Tune</summary>
+          <div class="fields" style="margin-top:10px" id="tuneFields"></div>
+          <button class="btn small" id="btnTuneReset" style="width:100%;margin-top:10px">Back To Recommended Settings</button>
+        </details>
+      </section>
+      <section class="glass" id="wifiCard">
+        <h2>Revenant Wi-Fi</h2>
+        <div id="wifiDone" hidden>
+          <div class="kv" id="wifiKv"></div>
+          <div class="stack" style="margin-top:10px">
+            <button class="btn small" id="btnChange" style="width:100%">Change Network</button>
+            <button class="btn small danger" id="btnWifiOff" style="width:100%">Forget Wi-Fi</button>
+          </div>
+        </div>
+        <div class="stack" id="wifiJoin">
+          <button class="btn small" id="btnScan" style="width:100%" disabled>Search Networks</button>
+          <div id="wifiList" class="stack"></div>
+          <input class="i" id="wifiSsid" placeholder="Network Name" autocomplete="off" style="width:100%">
+          <div class="pw"><input class="i" id="wifiPass" type="password" placeholder="Password" autocomplete="new-password" autocapitalize="off" spellcheck="false" style="width:100%;padding-right:38px"><button class="eye" id="btnEye" type="button" title="Show Password" aria-label="Show Password"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16" style="display:none"/></svg></button></div>
+          <button class="btn small hot" id="btnWifi" style="width:100%" disabled>Join Wi-Fi</button>
+        </div>
+        <p class="note" id="wifiNote" style="margin:10px 0 0"></p>
+      </section>
+      <section class="glass" id="fwCard">
+        <h2>Revenant Firmware</h2>
+        <div class="kv" id="fwInfo"></div>
+        <div class="stack" style="margin-top:10px">
+          <button class="btn small" id="btnFw" style="width:100%" disabled>Update Firmware</button>
+        </div>
+        <p class="note" id="fwNote" style="margin:10px 0 0"></p>
+      </section>
+    </div>
+
+    <div class="col col-mid">
+      <section class="glass">
+        <div class="boardhead">
+          <div class="title" id="devTitle"></div>
+          <div class="row">
+            <button class="iconbtn" id="mapSwitch" title="Map Mode" aria-label="Map Mode"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h14l-3-3M20 17H6l3 3"/></svg></button>
+            <button class="iconbtn" id="editSwitch" title="Layout Mode" aria-label="Layout Mode"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></button>
+            <button class="btn small hot" id="btnLearn">+ Learn Button</button>
+            <button class="btn small hot" id="btnAddKey" hidden>+ Add Key</button>
+          </div>
+        </div>
+        <div id="boardWrap"><div id="board"></div></div>
+        <div class="inspector hidden" id="inspector"></div>
+        <div class="inspector hidden" id="mapPanel"></div>
+        <p class="note" id="boardNote" style="margin:12px 0 0"></p>
+      </section>
+    </div>
+
+    <div class="col col-right">
+      <section class="glass">
+        <h2>Live Monitor <small id="monSub">Waiting for Revenant</small></h2>
+        <div class="strip" id="strip"></div>
+        <div class="mon-name idle" id="monName">Nothing Yet</div>
+        <div class="kv" id="monKv"></div>
+        <canvas id="wave"></canvas>
+        <ul class="hist" id="hist"></ul>
+        <div class="row" style="margin-top:10px"><button class="btn small" id="btnSim" hidden>Simulate A Press</button></div>
+      </section>
+      <section class="glass" id="libCard">
+        <h2>Code Library <small id="libSub">Online + Built In</small></h2>
+        <details id="appleBox" style="margin-bottom:8px">
+          <summary class="mp-lab" style="cursor:pointer;margin:0 0 6px">Built In Remotes</summary>
+          <p class="note" style="margin:0 0 6px">Tap one to add all its buttons to the device you are looking at. Apple and Sony codes, ready to use with no learning. A paired Apple TV only obeys the remote it was paired to, so if one Apple set does nothing, try another.</p>
+          <div class="stack" id="appleSets"></div>
+        </details>
+        <input class="i" id="libSearch" style="width:100%" placeholder="Search Brands, Models" autocomplete="off">
+        <ul class="results" id="libResults"></ul>
+        <div id="libPreview"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+(() => {
+'use strict';
+
+// ============================================================ helpers
+const $ = (s, r) => (r || document).querySelector(s);
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return e;
+}
+const uid = () => 'x' + Math.random().toString(36).slice(2, 8);
+function toast(msg, kind) {
+  const t = h('div', { class: 'toast ' + (kind || '') }, msg);
+  $('#toasts').append(t);
+  setTimeout(() => t.classList.add('out'), 2800);
+  setTimeout(() => t.remove(), 3300);
+}
+const asciiJson = (o) => JSON.stringify(o).replace(/[\u0080-￿]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+function pretty(name) {
+  return String(name || '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim().split(' ').map((w) =>
+    (w.length > 1 && w === w.toUpperCase()) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+// ============================================================ IR encoders (all return microseconds, mark first)
+const bitsLSB = (bytes) => bytes.flatMap((b) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (b >> i) & 1));
+const bitsN = (v, n) => Array.from({ length: n }, (_, i) => (v >> i) & 1);
+const bitsMSB = (v, n) => Array.from({ length: n }, (_, i) => (v >> (n - 1 - i)) & 1);
+function pulseDist(hdr, bits, mark, zero, one) {
+  const t = [...hdr];
+  for (const b of bits) t.push(mark, b ? one : zero);
+  t.push(mark);
+  return t;
+}
+const nec = (bytes) => ({ hz: 38000, t: pulseDist([9000, 4500], bitsLSB(bytes), 560, 560, 1690), rep: 1, gap: 0 });
+const samsung = (bytes) => ({ hz: 38000, t: pulseDist([4500, 4500], bitsLSB(bytes), 560, 560, 1690), rep: 1, gap: 0 });
+function sirc(bits) {
+  const t = [2400, 600];
+  for (const b of bits) t.push(b ? 1200 : 600, 600);
+  t.pop();
+  const len = t.reduce((a, b) => a + b, 0);
+  return { hz: 40000, t, rep: 6, gap: Math.max(5, Math.round((45000 - len) / 1000)) };
+}
+function rc5(addr, cmd) {
+  const bits = [1, cmd >= 64 ? 0 : 1, 0, ...bitsMSB(addr & 31, 5), ...bitsMSB(cmd & 63, 6)];
+  const halves = [];
+  for (const b of bits) { if (b) halves.push(0, 1); else halves.push(1, 0); }
+  let i = 0;
+  while (halves[i] === 0) i++;
+  const lv = halves.slice(i);
+  const t = [];
+  let cur = lv[0], run = 0;
+  for (const l of lv) { if (l === cur) run++; else { t.push(run * 889); cur = l; run = 1; } }
+  t.push(run * 889);
+  if (t.length % 2 === 0) t.pop();
+  return { hz: 36000, t, rep: 1, gap: 0 };
+}
+const hexBytes = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).map((x) => parseInt(x, 16));
+function fromParsed(e) {
+  const a = hexBytes(e.address), c = hexBytes(e.command);
+  if (!a.length || !c.length) return null;
+  switch (e.protocol) {
+    case 'NEC': return nec([a[0], a[0] ^ 0xff, c[0], c[0] ^ 0xff]);
+    case 'NECext': return nec([a[0], a[1] || 0, c[0], c[1] || 0]);
+    case 'Samsung32': return samsung([a[0], a[0], c[0], c[0] ^ 0xff]);
+    case 'SIRC': return sirc([...bitsN(c[0], 7), ...bitsN(a[0], 5)]);
+    case 'SIRC15': return sirc([...bitsN(c[0], 7), ...bitsN(a[0], 8)]);
+    case 'SIRC20': return sirc([...bitsN(c[0], 7), ...bitsN(a[0] | ((a[1] || 0) << 8), 13)]);
+    case 'RC5': case 'RC5X': return rc5(a[0], c[0]);
+    default: return null;
+  }
+}
+
+// ============================================================ Flipper .ir files
+function parseIr(text) {
+  const out = [];
+  let cur = null;
+  for (const line of text.split(/\r?\n/)) {
+    if (line.startsWith('#')) { if (cur && cur.name) out.push(cur); cur = {}; continue; }
+    const i = line.indexOf(':');
+    if (i < 0) continue;
+    const k = line.slice(0, i).trim().toLowerCase();
+    const v = line.slice(i + 1).trim();
+    if (k === 'filetype' || k === 'version') continue;
+    if (!cur) cur = {};
+    cur[k] = v;
+  }
+  if (cur && cur.name) out.push(cur);
+  return out;
+}
+function entryToCode(e) {
+  if (e.type === 'raw') {
+    const data = (e.data || '').split(/\s+/).filter(Boolean).map(Number).filter((n) => n > 0 && isFinite(n));
+    if (data.length < 3) return { why: 'empty' };
+    if (data.length > 500) return { why: 'too long' };
+    return { hz: parseInt(e.frequency, 10) || 38000, t: data.map((n) => Math.min(n, 32767)), rep: 1, gap: 0 };
+  }
+  const c = fromParsed(e);
+  return c || { why: e.protocol || 'unknown' };
+}
+
+// ============================================================ protocol guess, same code check, roles
+const near = (v, target) => Math.abs(v - target) <= target * 0.25;
+function guess(t) {
+  if (t.length < 3) return { name: 'Unknown', bits: null };
+  const m = t[0], s = t[1];
+  if (near(m, 9000) && near(s, 4500)) return { name: 'NEC', bits: (t.length - 3) / 2 };
+  if (near(m, 9000) && near(s, 2250)) return { name: 'NEC Repeat', bits: null };
+  if (near(m, 4500) && near(s, 4500)) return { name: 'Samsung', bits: (t.length - 3) / 2 };
+  if (near(m, 3456) && near(s, 1728)) return { name: 'Panasonic', bits: (t.length - 3) / 2 };
+  if (near(m, 2400) && near(s, 600)) return { name: 'Sony', bits: (t.length - 1) / 2 };
+  if (near(m, 8400) && near(s, 4200)) return { name: 'JVC', bits: (t.length - 3) / 2 };
+  return { name: 'Unknown', bits: null };
+}
+// How far a heard time may differ from a stored one. Short pulses wobble most in absolute terms, long ones in proportion.
+const TUNE_PRESETS = {
+  Careful: { abs: 150, pct: 8, prefix: false, noise: 300, gap: 1, shape: 0, why: 'Tells similar buttons apart. Use it for modern remotes that are always clean.' },
+  Balanced: { abs: 250, pct: 15, prefix: true, noise: 200, gap: 0, shape: 1, why: 'Works for most remotes, old and new. Start here.' },
+  Forgiving: { abs: 400, pct: 22, prefix: true, noise: 400, gap: 2, shape: 2, why: 'For worn out or very old remotes that look different every press. May confuse buttons that are alike.' },
+};
+const tune = { abs: 250, pct: 15, prefix: true, noise: 200, gap: 0, shape: 1, wait: 60, rep: 1, duty: 33, excess: 300 };
+try { Object.assign(tune, JSON.parse(localStorage.getItem('sr-tune') || '{}')); } catch (e) { /* storage may be blocked */ }
+const tolFor = (b) => Math.max(tune.abs, b * tune.pct / 100);
+function closeTo(a, b, n) {
+  for (let i = 0; i < n; i++) if (Math.abs(a[i] - b[i]) > tolFor(b[i])) return false;
+  return true;
+}
+// heard frame against a stored frame: 1 same, 2 a clean cut off start of it (a dropped tail), 0 different
+function frameMatch(h, r) {
+  if (!h || !r) return 0;
+  const hn = h.length, rn = r.length;
+  if (hn === rn || (hn > rn && hn <= rn + 2)) return closeTo(h, r, rn) ? 1 : 0;
+  if (tune.prefix && hn < rn && hn >= 11 && hn * 2 >= rn) return closeTo(h, r, hn - 1) ? 2 : 0;
+  return 0;
+}
+const sameCode = (a, b) => frameMatch(a, b) === 1;
+// the shape of a frame: every time becomes short, medium or long. Old remotes jitter in microseconds but not in shape.
+const cls = (v) => (v < 1000 ? 'a' : v < 4500 ? 'b' : 'c');
+const shapeOf = (t) => t.map(cls).join('');
+function editDist(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// how many symbols differ between a heard frame and a stored one, 99 when the frames are too short to judge by shape
+function shapeDist(h, r) {
+  if (!h || !r || h.length < 20 || r.length < 20 || h.length > 127 || r.length > 127) return 99;
+  return editDist(shapeOf(h), shapeOf(r));
+}
+// Decode known protocols from heard frames and rebuild a clean copy, the way Flipper does. The receiver garbles long start
+// pulses and stretches gaps, but the data bits survive, so the code is read from the bits and re-made with exact timings.
+function bitsToVal(bits, a, b) { let v = 0; for (let i = a; i < b; i++) v |= bits[i] << (i - a); return v; }
+const hex2 = (v) => v.toString(16).toUpperCase().padStart(2, '0');
+function decodeSirc(t) {
+  const nb = { 25: 12, 31: 15, 41: 20 }[t.length];
+  if (!nb || t[0] + t[1] < 1400) return null;
+  const bits = [];
+  for (let i = 0; i < nb; i++) {
+    const m = t[2 + 2 * i], sp = t[3 + 2 * i];
+    if (m < 250 || m > 1500) return null;
+    if (sp !== undefined && (sp < 350 || sp > 1600)) return null;
+    bits.push(m > 640 ? 1 : 0);
+  }
+  return { key: 'S' + bits.join(''), name: 'Sony SIRC' + (nb === 12 ? '' : nb), addr: bitsToVal(bits, 7, nb), cmd: bitsToVal(bits, 0, 7), code: sirc(bits) };
+}
+function decodeNecLike(t) {
+  if (t.length < 66 || t.length > 68) return null;
+  const lead = t[0] + t[1];
+  if (lead < 5000 || lead > 17000) return null;
+  const bits = [];
+  for (let i = 0; i < 32; i++) {
+    const m = t[2 + 2 * i], sp = t[3 + 2 * i];
+    if (m < 250 || m > 1100 || sp < 350 || sp > 2800) return null;
+    bits.push(sp > 1100 ? 1 : 0);
+  }
+  const b = [0, 1, 2, 3].map((k) => bitsToVal(bits, 8 * k, 8 * k + 8));
+  if (lead < 11500) return { key: 'M' + bits.join(''), name: 'Samsung', addr: b[0], cmd: b[2], code: samsung(b) };
+  const plain = (b[0] ^ b[1]) === 0xff && (b[2] ^ b[3]) === 0xff;
+  return { key: 'N' + bits.join(''), name: plain ? 'NEC' : 'NEC Extended', addr: plain ? b[0] : (b[1] << 8) | b[0], cmd: plain ? b[2] : (b[3] << 8) | b[2], code: nec(b) };
+}
+// the code most of the frames agree on, when at least two do
+function decodeFrames(frames) {
+  const votes = {};
+  for (const f of frames) { const d = decodeSirc(f) || decodeNecLike(f); if (d) { (votes[d.key] = votes[d.key] || { d, n: 0 }).n++; } }
+  const top = Object.values(votes).sort((x, y) => y.n - x.n)[0];
+  return top && top.n >= 2 ? { ...top.d, agree: top.n } : null;
+}
+// one clean frame out of the several frames a held button sends: the most common length, middle value at each position
+function consensus(frames) {
+  if (!frames.length) return null;
+  const groups = {};
+  for (const f of frames) (groups[shapeOf(f)] = groups[shapeOf(f)] || []).push(f);
+  let best = null;
+  for (const g of Object.values(groups)) if (!best || g.length > best.length || (g.length === best.length && g[0].length > best[0].length)) best = g;
+  const L = best[0].length, out = [];
+  for (let i = 0; i < L; i++) { const v = best.map((f) => f[i]).sort((x, y) => x - y); out.push(v[v.length >> 1]); }
+  return out;
+}
+const ROLE_RGB = { power: '255,60,120', vol: '25,242,255', ch: '255,159,28', media: '255,200,70', nav: '150,110,255', num: '225,225,255', misc: '255,43,214', enter: '57,255,20' };
+function roleOf(label, kind) {
+  const l = String(label).toLowerCase();
+  if (kind === 'kb' && /^(enter|play pause)$/.test(l)) return 'enter';
+  if (/power|standby|sleep|^on$|^off$/.test(l)) return 'power';
+  if (/vol|mute/.test(l)) return 'vol';
+  if (/\bch\b|channel|page/.test(l)) return 'ch';
+  if (/play|pause|stop|rec|\bff\b|\brew\b|forward|rewind|next|prev|skip/.test(l)) return 'media';
+  if (/^\d$/.test(l.trim())) return 'num';
+  if (/\bup\b|down|left|right|\bok\b|select|center|enter|menu|back|home|exit|return/.test(l)) return 'nav';
+  return 'misc';
+}
+
+// ============================================================ settings
+const KEY = 'super-remote-v1';
+function mkDevice(name) { return { id: uid(), name, cols: 5, buttons: [] }; }
+function mkButton(label, code, col, row, src) {
+  return { id: uid(), label, col, row, w: 1, h: 1, hz: code.hz, rep: code.rep, gap: code.gap, t: code.t, src: src || '' };
+}
+const APPLE_ID = '8B';
+const APPLE = [
+  ['Menu', '02', 1, 3], ['Play Pause', '5E', 3, 3], ['Up', '0B', 2, 0], ['Down', '0D', 2, 2],
+  ['Left', '08', 1, 1], ['Right', '07', 3, 1], ['Select', '04', 2, 1],
+];
+function appleButtons() {
+  return APPLE.map(([label, cmd, col, row]) =>
+    mkButton(label, fromParsed({ protocol: 'NECext', address: 'EE 87 00 00', command: cmd + ' ' + APPLE_ID + ' 00 00' }), col, row, 'Apple Remote Classic'));
+}
+// Bluetooth keyboard, media key and mouse outputs. HID usage codes: keyboard page 7, consumer page 12.
+const KEYCAT = (() => {
+  const k = (label, code, m) => [label, { k: 'key', m: m || 0, c: code }];
+  const c = (label, u) => [label, { k: 'cons', u }];
+  const ms = (label, b, x, y, w) => [label, { k: 'mouse', b, x, y, w }];
+  const letters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((ch, i) => k(ch, 4 + i));
+  const nums = [...'1234567890'].map((ch, i) => k(ch, 30 + i));
+  const fn = Array.from({ length: 12 }, (_, i) => k('F' + (i + 1), 58 + i));
+  return [
+    ['Arrows And Enter', [k('Up', 82), k('Down', 81), k('Left', 80), k('Right', 79), k('Enter', 40), k('Esc', 41), k('Back Space', 42), k('Delete', 76), k('Tab', 43), k('Space', 44), k('Home Key', 74), k('End', 77), k('Page Up', 75), k('Page Down', 78)]],
+    ['Media', [c('Play Pause', 205), c('Play', 176), c('Pause', 177), c('Stop', 183), c('Record', 178), c('Next Track', 181), c('Previous Track', 182), c('Fast Forward', 179), c('Rewind', 180), c('Eject', 184), c('Shuffle', 185)]],
+    ['Volume And Sound', [c('Volume Up', 233), c('Volume Down', 234), c('Mute', 226), c('Bass Boost', 229), c('Bass Up', 338), c('Bass Down', 339), c('Treble Up', 340), c('Treble Down', 341)]],
+    ['TV Keys', [c('TV Home', 547), c('TV Back', 548), c('TV Menu', 64), c('TV Guide', 141), c('TV Power', 48), c('TV Sleep', 50), c('Channel Up', 156), c('Channel Down', 157), c('Captions', 97), c('Help', 149), c('Media Select', 135), c('On Screen Data', 96)]],
+    ['TV Menu Keys', [c('Menu Select', 65), c('Menu Up', 66), c('Menu Down', 67), c('Menu Left', 68), c('Menu Right', 69), c('Menu Escape', 70)]],
+    ['Screen And Apps', [c('Brightness Up', 111), c('Brightness Down', 112), c('Snapshot', 101), c('Browser Search', 545), c('Browser Forward', 549), c('Browser Stop', 550), c('Browser Refresh', 551), c('Bookmarks', 554), c('Media Player', 387), c('Mail', 394), c('Calculator', 402), c('File Explorer', 404)]],
+    ['Mouse And Scroll', [ms('Click', 1, 0, 0, 0), ms('Right Click', 2, 0, 0, 0), ms('Scroll Up', 0, 0, 0, 3), ms('Scroll Down', 0, 0, 0, -3), ms('Mouse Up', 0, 0, -24, 0), ms('Mouse Down', 0, 0, 24, 0), ms('Mouse Left', 0, -24, 0, 0), ms('Mouse Right', 0, 24, 0, 0)]],
+    ['Letters', letters], ['Numbers', nums], ['Function Keys', fn],
+  ];
+})();
+function mkOut(label, out, col, row) {
+  return { id: uid(), label, col, row, w: 1, h: 1, hz: 38000, rep: 1, gap: 0, t: [], out: JSON.parse(JSON.stringify(out)), src: 'Bluetooth' };
+}
+function lineFor(o) {
+  if (o.k === 'key') return 'KEY ' + (o.m | 0) + ' ' + (o.c | 0);
+  if (o.k === 'cons') return 'CONS ' + (o.u | 0);
+  return 'MOUSE ' + (o.b | 0) + ' ' + (o.x | 0) + ' ' + (o.y | 0) + ' ' + (o.w | 0);
+}
+function catFind(name) { for (const [, items] of KEYCAT) for (const [l, o] of items) if (l === name) return o; return null; }
+function kbDefault() {
+  const d = { id: uid(), name: 'Bluetooth Keyboard', cols: 5, kind: 'kb', buttons: [] };
+  const at = (name, col, row) => d.buttons.push(mkOut(name, catFind(name), col, row));
+  at('Up', 2, 0); at('Left', 1, 1); at('Enter', 2, 1); at('Right', 3, 1); at('Down', 2, 2);
+  at('Back Space', 0, 3); at('Delete', 1, 3); at('Esc', 2, 3); at('Space', 3, 3); at('Tab', 4, 3);
+  at('Previous Track', 0, 4); at('Play Pause', 1, 4); at('Next Track', 2, 4); at('Volume Down', 3, 4); at('Volume Up', 4, 4);
+  at('Mute', 0, 5); at('TV Home', 1, 5); at('TV Back', 2, 5); at('Click', 3, 5); at('Scroll Up', 4, 5); at('Scroll Down', 4, 6);
+  return d;
+}
+function defaultState() {
+  const apple = mkDevice('Apple TV');
+  apple.buttons = appleButtons();
+  return { format: 'super-remote', version: 1, devices: [kbDefault(), apple, mkDevice('Sony Stereo Receiver'), mkDevice('Panasonic TV (80s)'), mkDevice('Zenith Space Command')] };
+}
+function validState(o) {
+  if (!o || o.format !== 'super-remote' || !Array.isArray(o.devices)) return null;
+  for (const d of o.devices) {
+    if (typeof d.name !== 'string' || !Array.isArray(d.buttons)) return null;
+    d.id = d.id || uid();
+    d.cols = Math.max(2, Math.min(10, d.cols | 0 || 5));
+    d.kind = d.kind === 'kb' ? 'kb' : undefined;
+    d.buttons = d.buttons.filter((b) => b && ((Array.isArray(b.t) && b.t.length >= 2) || (b.out && b.out.k))).map((b) => ({
+      id: b.id || uid(), label: String(b.label || 'Button'), col: b.col | 0, row: b.row | 0, w: Math.max(1, b.w | 0 || 1), h: Math.max(1, b.h | 0 || 1),
+      hz: b.hz || 38000, rep: b.rep || 1, gap: b.gap || 0, t: (b.t || []).map(Number), src: b.src || '', out: b.out && b.out.k ? b.out : undefined,
+      m: Array.isArray(b.m) && b.m.length >= 3 ? b.m.map(Number) : undefined,
+      map: b.map && Array.isArray(b.map.to) ? { to: b.map.to.map(String), hold: !!b.map.hold } : undefined,
+    }));
+  }
+  for (const d of o.devices) if (d.kind === 'kb') for (const b of d.buttons) { if (b.label === 'Escape') b.label = 'Esc'; else if (b.label === 'Backspace') b.label = 'Back Space'; }
+  for (const d of o.devices) {  // move Scroll Down under Scroll Up when it is still in the old default spot
+    if (d.kind !== 'kb') continue;
+    const dn = d.buttons.find((x) => x.label === 'Scroll Down' && x.col === 3 && x.row === 6);
+    const up = d.buttons.find((x) => x.label === 'Scroll Up' && x.col === 4 && x.row === 5);
+    if (dn && up && !d.buttons.some((x) => x.col === 4 && x.row === 6)) dn.col = 4;
+  }
+  for (const d of o.devices) for (const b of d.buttons) if (b.hz === 40000 && b.rep === 3 && !b.out) b.rep = 6;  // Sony codes work better with six frames
+  if (!o.devices.some((d) => d.kind === 'kb')) o.devices.unshift(kbDefault());  // the Bluetooth keyboard is always on deck
+  return o;
+}
+let S;
+try { S = validState(JSON.parse(localStorage.getItem(KEY))); } catch (e) { S = null; }
+let fromDefault = !S;
+if (!S) S = defaultState();
+let stickJson = null;
+const ui = { sel: S.devices[0] ? S.devices[0].id : null, edit: false, pick: null, map: false, src: null, unknown: false, dest: null };
+try { ui.dest = localStorage.getItem('sr-lastdest'); } catch (e) { /* storage may be blocked */ }
+let autoSave = false;
+try { autoSave = localStorage.getItem('sr-autosave') === '1'; } catch (e) { /* storage may be blocked */ }
+let autoTimer = null;
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage may be blocked */ }
+  fromDefault = false;
+  renderSync();
+  if (autoSave) { clearTimeout(autoTimer); autoTimer = setTimeout(() => { if (link.mode !== 'off' && stickJson !== asciiJson(S)) saveStick(true); }, 1200); }
+}
+const cur = () => S.devices.find((d) => d.id === ui.sel) || S.devices[0];
+
+// ============================================================ layout helpers
+function overlaps(d, col, row, w, hh, ignore) {
+  return d.buttons.filter((b) => b.id !== ignore && col < b.col + b.w && col + w > b.col && row < b.row + b.h && row + hh > b.row);
+}
+function rowsFor(d) { return Math.max(5, d.buttons.reduce((m, b) => Math.max(m, b.row + b.h), 0) + 1); }
+function firstFree(d, w, hh) {
+  for (let r = 0; r < 200; r++) for (let c = 0; c + w <= d.cols; c++) if (!overlaps(d, c, r, w, hh).length) return { col: c, row: r };
+  return { col: 0, row: 0 };
+}
+function addButtons(d, list) {
+  for (const b of list) {
+    const p = firstFree(d, 1, 1);
+    b.col = p.col; b.row = p.row;
+    d.buttons.push(b);
+  }
+}
+
+// ============================================================ link (Bluetooth or demo)
+const SVC = '7a3f0001-5d4e-4b6a-9c1f-0a0d5e0c0001';
+const RXC = '7a3f0002-5d4e-4b6a-9c1f-0a0d5e0c0001';
+const TXC = '7a3f0003-5d4e-4b6a-9c1f-0a0d5e0c0001';
+const link = { mode: 'off', dev: null, rx: null, tx: null, buf: '', pending: [], q: Promise.resolve(), info: '', kb: false, fw: '', ota: false, map: false, otaAcked: 0, otaWake: null, addr: '', seq: 0, fails: 0, pollBusy: false, pollPause: false, timer: null, wifi: '', wifiMsg: '', nets: [], bleMode: '', expectDrop: false, tuneOk: false, wifiOn: true, scanning: false, switching: false, quiet: false, changing: false, lock: false, open: false, locked: false, synced: false };
+
+function onLine(line) {
+  if (line.startsWith('OTA+ ')) { link.otaAcked = parseInt(line.slice(5), 10) || 0; if (link.otaWake) link.otaWake(); return; }
+  if (line.startsWith('FIRED ')) { const failed = / FAILED$/.test(line); M.fired = line.slice(6).replace(/ FAILED$/, ''); M.firedAt = performance.now(); toast(failed ? 'Revenant could not transmit ' + M.fired + ' (its own hardware reported an error)' : 'Revenant transmitted ' + M.fired, failed ? 'bad' : 'good'); renderMonitor(); return; }
+  if (line.startsWith('MODE ')) { link.bleMode = line.trim().endsWith('kb') ? 'kb' : 'setup'; renderWifi(); return; }
+  if (line === 'UNLOCKED') { link.open = true; link.locked = false; renderSync(); if (!link.synced && isLive()) syncFromStick().catch((e) => toast('Revenant said: ' + e.message, 'bad')); return; }
+  if (line === 'LOCKED') { link.open = false; renderSync(); return; }
+  if (line.startsWith('WIFINET ')) { const [r, sec, ...nm] = line.slice(8).split('|'); link.nets.push({ rssi: parseInt(r, 10), sec: sec === '1', name: nm.join('|') }); return; }
+  if (line.startsWith('WIFIEND')) { link.scanning = false; renderWifi(); return; }
+  if (line.startsWith('WIFI ')) {
+    const p = line.trim().split(' ');
+    if (p[1] === 'up') { link.wifi = p[2] || ''; link.wifiMsg = ''; link.changing = false; renderWifi(); if (link.mode === 'ble' && link.wifi) switchToWifi(link.wifi); }
+    else if (p[1] === 'fail') { link.wifiMsg = 'Could not join. Check the name and password.'; toast('Could not join that network', 'bad'); renderWifi(); }
+    else if (p[1] === 'joining') { link.wifiMsg = 'Joining'; renderWifi(); }
+    else if (p[1] === 'off') { link.wifi = ''; link.wifiMsg = ''; renderWifi(); }
+    return;
+  }
+  if (line.startsWith('KB ')) { link.kb = line.trim() === 'KB 1'; renderLink(); return; }
+  if (line.startsWith('RX ')) {
+    const n = line.slice(3).trim().split(/\s+/).map(Number);
+    const t = n.slice(1);
+    if (t.length >= 3) onRx(t);
+    return;
+  }
+  const p = link.pending;
+  if (line.startsWith('ERR')) {
+    const w = p.shift();
+    if (w) { clearTimeout(w.timer); w.reject(new Error(line.trim() === 'ERR locked' ? 'Press the front button on Revenant to allow changes' : line)); }
+    return;
+  }
+  const i = p.findIndex((w) => w.prefixes.some((x) => line.startsWith(x)));
+  if (i >= 0) { const w = p.splice(i, 1)[0]; clearTimeout(w.timer); w.resolve(line); }
+}
+function onChunk(text) {
+  link.buf += text;
+  let i;
+  while ((i = link.buf.indexOf('\n')) >= 0) {
+    const line = link.buf.slice(0, i).replace(/\r$/, '');
+    link.buf = link.buf.slice(i + 1);
+    if (line) onLine(line);
+  }
+}
+function writeLine(s) {
+  link.q = link.q.then(async () => {
+    if (link.mode === 'demo') { demoHandle(s); return; }
+    if (link.mode === 'wifi') { onChunk(await wifiFetch('/cmd', { method: 'POST', body: s }, 25000)); return; }
+    const data = new TextEncoder().encode(s + '\n');
+    try { for (let o = 0; o < data.length; o += 180) await link.rx.writeValueWithResponse(data.slice(o, o + 180)); }
+    catch (e) { bleDead(); throw new Error('The Bluetooth link dropped. Connect again'); }
+  });
+  return link.q;
+}
+function request(line, prefixes, ms) {
+  return new Promise((resolve, reject) => {
+    if (link.mode === 'off') { reject(new Error('Not connected')); return; }
+    const w = { prefixes, resolve, reject, timer: setTimeout(() => {
+      const i = link.pending.indexOf(w);
+      if (i >= 0) link.pending.splice(i, 1);
+      reject(new Error('Revenant did not answer'));
+    }, ms || 5000) };
+    link.pending.push(w);
+    writeLine(line).catch((e) => { clearTimeout(w.timer); reject(e); });
+  });
+}
+let wantLink = true;  // false after the Disconnect button, so it does not reconnect on its own
+const seenDev = new WeakSet();
+async function openDevice(dev) {
+  if (!seenDev.has(dev)) {
+    seenDev.add(dev);
+    dev.addEventListener('gattserverdisconnected', () => {
+      const was = link.mode === 'ble';
+      link.mode = 'off'; link.kb = false; link.fw = ''; link.ota = false; link.map = false; link.lock = false; link.locked = false; link.tuneOk = false; link.synced = false; link.pending.length = 0; renderLink();
+      if (was) toast(wantLink ? 'Revenant lost, reconnecting' : 'Revenant disconnected', 'bad');
+      if (wantLink) setTimeout(() => (link.expectDrop ? (link.expectDrop = false, autoWifi()) : autoConnect(dev)), link.expectDrop ? 7000 : 1500);
+    });
+  }
+  const srv = await dev.gatt.connect();
+  const svc = await srv.getPrimaryService(SVC);
+  link.rx = await svc.getCharacteristic(RXC);
+  link.tx = await svc.getCharacteristic(TXC);
+  await link.tx.startNotifications();
+  link.tx.addEventListener('characteristicvaluechanged', (e) => onChunk(new TextDecoder().decode(e.target.value)));
+  link.dev = dev; link.mode = 'ble'; link.buf = ''; wantLink = true;
+  await afterConnect();
+}
+async function connectBle() {
+  if (!navigator.bluetooth) { toast('This browser has no Web Bluetooth. Use Chrome.', 'bad'); return; }
+  try {
+    wantLink = true;
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Revenant Setup' }, { services: [SVC] }], optionalServices: [SVC] });
+    await openDevice(dev);
+  } catch (e) {
+    if (e && e.name === 'NotFoundError') { if (!/cancel/i.test(e.message || '')) toast('No setup device found. On Revenant open Menu, Bluetooth, and pick Setup', 'bad'); }
+    else if (e) toast('Could not connect over Bluetooth. Try again', 'bad');
+  }
+}
+// After the first pick, Chrome remembers Revenant. The page tries it quietly on load and whenever the link drops.
+let autoBusy = false;
+async function autoConnect(dev) {
+  if (autoBusy || !wantLink || link.mode !== 'off') return;
+  autoBusy = true;
+  try {
+    if (!dev) {
+      const list = await navigator.bluetooth.getDevices();
+      dev = list.find((d) => /revenant/i.test(d.name || '')) || list[0];
+    }
+    if (dev) await openDevice(dev);
+  } catch (e) {
+    if (dev && wantLink) setTimeout(() => autoConnect(dev), 4000);
+  } finally { autoBusy = false; }
+}
+
+function getKey() { try { return localStorage.getItem('sr-key') || ''; } catch (e) { return ''; } }
+function setKey(k) { try { localStorage.setItem('sr-key', k); } catch (e) { /* storage may be blocked */ } }
+async function afterConnect() {
+  renderLink();
+  try {
+    const hello = await request('HELLO', ['HELLO']);
+    link.info = hello;
+    link.kb = /\bkb=1\b/.test(hello);
+    link.fw = (hello.match(/^HELLO \S+ (\S+)/) || [])[1] || '';
+    link.ota = /\bota=1\b/.test(hello);
+    link.map = /\bmap=1\b/.test(hello);
+    link.wifiOn = !/\bwifion=0\b/.test(hello);
+    { const m = hello.match(/\btune=([\d,]+)/); if (m) { const v = m[1].split(',').map(Number); const keys = ['abs', 'pct', 'prefix', 'noise', 'gap', 'shape', 'wait', 'rep', 'duty']; keys.forEach((k, i) => { if (Number.isFinite(v[i])) tune[k] = k === 'prefix' ? v[i] === 1 : v[i]; }); try { localStorage.setItem('sr-tune', JSON.stringify(tune)); } catch (e) { /* ignore */ } renderTune(); link.tuneOk = true; } }
+    { const bm = hello.match(/\bble=(kb|setup)\b/); link.bleMode = bm ? bm[1] : ''; }
+    link.lock = /\block=1\b/.test(hello);
+    link.open = /\bopen=1\b/.test(hello);
+    { const m = hello.match(/\bwifi=(\S+)/); link.wifi = m && m[1] !== '0' ? m[1] : ''; }
+    link.locked = link.mode === 'ble' && link.lock && !link.open;
+    checkFirmware();
+    renderLink();
+    if (!link.quiet) toast(link.locked ? 'Press the front button on Revenant to allow changes' : 'Revenant connected', 'good');
+    if (!link.locked) await syncFromStick();
+  } catch (e) { toast('Revenant said: ' + e.message, 'bad'); }
+}
+async function syncFromStick() {
+  link.synced = true;
+  link.locked = false;
+  if (link.mode === 'ble' && link.lock) { const t = await request('TOKEN', ['TOKEN'], 5000); if (/^TOKEN [0-9a-f]{32}/.test(t)) setKey(t.slice(6).trim()); }
+  if (!link.wifi && !link.nets.length) scanWifi();
+  const f = await request('LOAD', ['FILE'], 15000);
+  const body = f.slice(4).trim();
+  stickJson = body || null;
+  if (body && fromDefault) {
+    try { const o = validState(JSON.parse(body)); if (o) { S = o; ui.sel = S.devices[0].id; persist(); renderAll(); toast('Loaded settings from Revenant', 'good'); } } catch (e) { /* ignore */ }
+  }
+  renderSync();
+  if (autoSave && stickJson !== asciiJson(S)) { clearTimeout(autoTimer); autoTimer = setTimeout(() => { if (link.mode !== 'off' && stickJson !== asciiJson(S)) saveStick(true); }, 1500); }  // auto save also catches up right after connecting
+}
+function bleDead() {
+  if (link.mode !== 'ble') return;
+  wantLink = false;
+  try { if (link.dev && link.dev.gatt.connected) link.dev.gatt.disconnect(); } catch (e) { /* already gone */ }
+  link.mode = 'off'; link.kb = false; link.fw = ''; link.ota = false; link.map = false; link.lock = false; link.locked = false; link.synced = false; link.pending.length = 0;
+  renderLink();
+  toast('The Bluetooth link dropped. Click Connect Revenant', 'bad');
+}
+function writeLines(list) {
+  if (link.mode === 'wifi') return writeLine(list.join('\n'));
+  return list.reduce((pr, l) => pr.then(() => writeLine(l)), Promise.resolve());
+}
+function disconnect() {
+  wantLink = false;
+  stopPoll();
+  if (link.mode === 'ble' && link.dev && link.dev.gatt.connected) link.dev.gatt.disconnect();
+  link.mode = 'off'; link.kb = false; link.pending.length = 0; renderLink();
+}
+
+// Wi-Fi link: plain HTTP to Revenant, polled for heard buttons
+const isLive = () => link.mode === 'ble' || link.mode === 'wifi';
+async function wifiFetch(path, opt, ms) {
+  const ac = new AbortController();
+  const tm = setTimeout(() => ac.abort(), ms || 4000);
+  try {
+    const o = opt || {};
+    const r = await fetch('http://' + link.addr + path, { ...o, headers: { ...(o.headers || {}), 'X-Revenant-Key': getKey() }, signal: ac.signal });
+    if (r.status === 401) throw new Error('Revenant wants a fresh pairing, connect once over Bluetooth');
+    return await r.text();
+  } finally { clearTimeout(tm); }
+}
+function stopPoll() { clearInterval(link.timer); link.timer = null; }
+async function pollOnce() {
+  if (link.mode !== 'wifi' || link.pollBusy || link.pollPause) return;
+  link.pollBusy = true;
+  try {
+    const t = await wifiFetch('/poll?since=' + link.seq, {}, 3000);
+    const lines = t.split('\n');
+    link.seq = parseInt(lines[0], 10) || link.seq;
+    link.fails = 0;
+    if (link.primed) { for (const l of lines.slice(1)) if (l) onLine(l); }  // the first answer is old history from before this page opened, so it is skipped
+    link.primed = true;
+  } catch (e) {
+    if (++link.fails >= 4) wifiLost();
+  } finally { link.pollBusy = false; }
+}
+function wifiLost() {
+  stopPoll();
+  const was = link.mode === 'wifi';
+  link.mode = 'off'; link.kb = false; link.fw = ''; link.ota = false; link.map = false; link.lock = false; link.locked = false; link.tuneOk = false; link.synced = false; link.pending.length = 0; renderLink();
+  if (was) toast(wantLink ? 'Revenant lost, reconnecting' : 'Revenant disconnected', 'bad');
+  if (wantLink) setTimeout(autoWifi, link.expectDrop ? 6000 : 3000);
+  link.expectDrop = false;
+}
+async function connectWifi(addr) {
+  const prev = link.addr;
+  link.addr = addr;
+  try {
+    const t = await wifiFetch('/hello', {}, 3000);
+    if (!/^HELLO/.test(t)) throw new Error('That is not a Revenant');
+  } catch (e) { link.addr = prev; throw e; }
+  link.mode = 'wifi'; link.buf = ''; link.seq = 0; link.primed = false; link.fails = 0; link.pollPause = false; wantLink = true;
+  try { localStorage.setItem('sr-addr', addr); } catch (e) { /* storage may be blocked */ }
+  stopPoll(); link.timer = setInterval(pollOnce, 350);
+  await afterConnect();
+}
+async function autoWifi() {
+  if (location.protocol === 'https:' || autoBusy || !wantLink || link.mode !== 'off') return;
+  let last = '';
+  try { last = localStorage.getItem('sr-addr') || ''; } catch (e) { /* ignore */ }
+  autoBusy = true;
+  try {
+    for (const a of [...new Set([last, 'revenant.local'].filter(Boolean))]) { try { await connectWifi(a); return; } catch (e) { /* try the next address */ } }
+    if (last && wantLink) setTimeout(autoWifi, 5000);
+  } finally { autoBusy = false; }
+}
+function scanWifi() {
+  if (!isLive() || link.scanning) return;
+  link.nets = []; link.scanning = true; renderWifi();
+  writeLine('WIFISCAN').catch((e) => { link.scanning = false; renderWifi(); toast('Search failed: ' + e.message, 'bad'); });
+  setTimeout(() => { if (link.scanning) { link.scanning = false; renderWifi(); } }, 15000);
+}
+function renderWifi() {
+  const card = $('#wifiCard');
+  if (!card) return;
+  const on = isLive();
+  const joined = !!link.wifi;
+  const joining = link.wifiMsg === 'Joining';
+  const busy = joining || link.switching;
+  $('#wifiDone').hidden = !(joined && !link.changing);
+  $('#wifiJoin').hidden = joined && !link.changing;
+  let ssid = '';
+  try { ssid = localStorage.getItem('sr-ssid') || ''; } catch (e) { /* ignore */ }
+  const kv = $('#wifiKv');
+  kv.innerHTML = '';
+  kv.append(h('span', {}, 'Network'), h('span', {}, ssid || 'Saved On Revenant'), h('span', {}, 'Address'), h('span', {}, link.wifi || ''),
+    h('span', {}, 'This Page'), h('span', {}, link.mode === 'wifi' ? 'Using Wi-Fi' : link.switching ? 'Switching' : on ? 'Using Bluetooth' : 'Not Connected'),
+    h('span', {}, 'Bluetooth'), h('span', {}, !on || !link.bleMode ? '-' : link.bleMode === 'kb' ? (link.kb ? 'Keyboard, paired' : 'Keyboard, waiting') : 'Setup'));
+  $('#btnWifi').disabled = !on || busy;
+  $('#btnWifi').textContent = joining ? 'Joining' : 'Join Wi-Fi';
+  $('#btnScan').disabled = !on || link.scanning || busy;
+  $('#btnScan').textContent = link.scanning ? 'Searching' : link.nets.length ? 'Search Again' : 'Search Networks';
+  $('#wifiSsid').disabled = !on || busy;
+  $('#wifiPass').disabled = !on || busy;
+  $('#btnChange').disabled = !on || busy;
+  $('#btnWifiOff').disabled = !on || busy;
+  const list = $('#wifiList');
+  list.innerHTML = '';
+  for (const n of link.nets) {
+    const lvl = n.rssi > -60 ? 'Strong' : n.rssi > -75 ? 'Good' : 'Weak';
+    list.append(h('button', { class: 'btn small' + ($('#wifiSsid').value === n.name ? ' hot' : ''), disabled: busy, style: 'display:flex;justify-content:space-between;gap:8px;text-align:left', onclick: () => { $('#wifiSsid').value = n.name; renderWifi(); $('#wifiPass').focus(); } },
+      h('span', {}, n.name), h('span', { style: 'opacity:.6;white-space:nowrap' }, lvl + (n.sec ? '' : ' Open'))));
+  }
+  $('#wifiNote').textContent = on && !link.wifiOn && !link.wifi ? 'Wi-Fi is switched off in the Revenant menu. Joining a network turns it back on.'
+    : !on ? 'Connect Revenant first. Wi-Fi is set up once over Bluetooth, after that this page finds Revenant by itself.'
+    : joining ? 'Joining the network, a few seconds.'
+    : link.switching ? 'Joined. Switching this page over to Wi-Fi.'
+    : link.wifiMsg && link.wifiMsg !== 'Joining' ? link.wifiMsg
+    : joined ? '' : 'Pick your network, type the password, and join.';
+}
+async function switchToWifi(ip) {
+  if (link.switching || link.mode === 'wifi') return;
+  link.switching = true; link.quiet = true; link.changing = false; renderWifi();
+  const dev = link.dev;
+  let ok = false;
+  for (let i = 0; i < 5 && !ok; i++) {
+    try { await connectWifi(ip); ok = true; } catch (e) { await new Promise((r) => setTimeout(r, 1500)); }
+  }
+  link.switching = false; link.quiet = false;
+  if (ok) {
+    toast('Connected over Wi-Fi', 'good');
+    if (dev && dev.gatt.connected) dev.gatt.disconnect();
+    if (link.bleMode === 'setup') setTimeout(() => { toast('Wi-Fi works, so Bluetooth becomes a keyboard for your Apple TV', 'good'); setBtMode('kb'); }, 1500);
+  } else {
+    link.wifiMsg = 'Revenant joined, but this computer could not reach it. Same network? Bluetooth stays on.';
+    toast('Could not reach Revenant over Wi-Fi', 'bad');
+  }
+  renderWifi();
+}
+function setBtMode(mode) {
+  if (!isLive()) return;
+  link.expectDrop = true;
+  toast(mode === 'kb' ? 'Switching to keyboard mode, Revenant restarts' : 'Switching to setup mode, Revenant restarts', 'good');
+  writeLine('MODE ' + mode).catch((e) => { link.expectDrop = false; toast('Could not switch: ' + e.message, 'bad'); });
+}
+// demo stick
+function demoHandle(s) {
+  const say = (x) => setTimeout(() => onChunk(x + '\n'), 120);
+  if (s === 'HELLO') say('HELLO super-remote 0.4 p4 bat=88 in=1 out=1 kb=0 ota=0 map=1 rules=0 demo');
+  else if (s.startsWith('SEND ')) say('SENT ' + s.split(' ')[1]);
+  else if (/^(KEY|CONS|MOUSE) /.test(s)) say('SENT key');
+  else if (s === 'MAPEND') say('MAPSAVED 0');
+  else if (s.startsWith('SAVE ')) { try { localStorage.setItem(KEY + '-demo-file', s.slice(5)); } catch (e) { /* ignore */ } say('SAVED ' + (s.length - 5)); }
+  else if (s === 'LOAD') { let f = ''; try { f = localStorage.getItem(KEY + '-demo-file') || ''; } catch (e) { /* ignore */ } say('FILE ' + f); }
+  else say('PONG');
+}
+function startDemo() {
+  link.mode = 'demo'; link.buf = '';
+  afterConnect();
+}
+function simulatePress() {
+  const all = S.devices.flatMap((d) => d.buttons);
+  if (!all.length) { toast('Add a button first, the demo replays your own codes'); return; }
+  const b = all[Math.floor(Math.random() * all.length)];
+  const t = b.t.map((v) => Math.round(v * (0.96 + Math.random() * 0.08)));
+  onChunk('RX ' + t.length + ' ' + t.join(' ') + '\n');
+  setTimeout(() => onChunk('RX ' + t.length + ' ' + t.join(' ') + '\n'), 110);
+}
+
+// ============================================================ live monitor
+const M = { last: null, lastAt: 0, ref: null, burst: 0, isNew: true, newCount: 0, seq: 0, hist: [], press: [], cons: null };
+const learn = { active: false, onGot: null };
+function onRx(t) {
+  const now = performance.now();
+  if (window.__rec) window.__rec.push({ t: Math.round(now), v: t.slice() });  // diagnostics: set window.__rec = [] to record every frame
+  if (M.last && now - M.lastAt < 250) {
+    M.burst++;
+  } else {
+    M.burst = 1;
+    M.isNew = frameMatch(t, M.ref) === 0 && frameMatch(M.ref, t) === 0;
+    if (M.isNew) M.newCount++;
+    M.ref = t; M.press = [];
+  }
+  M.lastAt = now; M.last = t; M.seq++;
+  M.press.push(t);
+  M.cons = consensus(M.press);
+  if (M.burst === 1) {
+    M.hist.unshift({ g: guess(t), n: t.length, isNew: M.isNew, match: '' });
+    if (M.hist.length > 12) M.hist.pop();
+  }
+  { const mm = matchFor(M.cons); M.hist[0].match = mm.exact.length ? mm.exact.map((x) => x.d.name + ' · ' + x.b.label).join(', ') + (mm.partial ? ' (partial)' : '') : ''; }
+  renderMonitor();
+  if (learn.active && learn.onGot) learn.onGot(t, M.burst === 1);
+  else if (ui.map && !document.querySelector('.veil') && !ui.unknownLocked) autoPickSource(M.cons, M.burst === 1);
+}
+// which learned button, if any, a heard code is. Also the nearest miss, for working out why it did not match.
+function matchFor(t) {
+  const exact = [], prefix = [];
+  let best = null;
+  if (!t) return { exact, best, partial: false };
+  for (const d of S.devices) for (const b of d.buttons) {
+    if (!b.t || b.t.length < 3) continue;
+    const bt = b.m && b.m.length >= 3 ? b.m : b.t;
+    const m = frameMatch(t, bt);
+    if (m === 1) { exact.push({ d, b }); continue; }
+    if (m === 2) { prefix.push({ d, b }); continue; }
+    const lenDiff = Math.abs(t.length - bt.length);
+    let off = 0;
+    for (let i = 0; i < Math.min(t.length, bt.length); i++) off = Math.max(off, Math.abs(t[i] - bt[i]));
+    const score = lenDiff * 1000 + off;
+    if (!best || score < best.score) best = { d, b, lenDiff, off, score };
+  }
+  // a cut off frame only counts when exactly one learned button fits it
+  let partial = false;
+  if (!exact.length && prefix.length === 1) { exact.push(prefix[0]); partial = true; }
+  // last resort for jittery remotes: the closest by shape, only when it clearly beats the runner up
+  let shapeNote = '';
+  if (!exact.length && !prefix.length) {
+    const ranked = [];
+    for (const d of S.devices) for (const b of d.buttons) if (b.t && b.t.length >= 20) ranked.push({ d, b, dist: shapeDist(t, b.m && b.m.length >= 3 ? b.m : b.t) });
+    ranked.sort((x, y) => x.dist - y.dist);
+    if (ranked.length && ranked[0].dist <= tune.shape && (ranked.length < 2 || ranked[1].dist - ranked[0].dist >= 2)) { exact.push(ranked[0]); partial = true; shapeNote = 'by shape, ' + ranked[0].dist + ' symbols differ'; }
+    else if (ranked.length && ranked[0].dist < 99) shapeNote = 'closest by shape: ' + ranked[0].b.label + ' (' + ranked[0].dist + ' symbols differ' + (ranked[1] && ranked[1].dist - ranked[0].dist < 2 ? ', ' + ranked[1].b.label + ' is as close' : '') + ')';
+  }
+  return { exact, best, partial, shapeNote, ambiguous: !exact.length && prefix.length > 1 ? prefix : null };
+}
+function drawWave(canvas, t) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, hgt = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = hgt * dpr;
+  const g = canvas.getContext('2d');
+  g.scale(dpr, dpr);
+  g.clearRect(0, 0, w, hgt);
+  if (!t || !t.length) return;
+  const total = t.reduce((a, b) => a + b, 0);
+  const pad = 8, base = hgt - 10, top = 10;
+  const k = (w - pad * 2) / total;
+  let x = pad;
+  g.shadowColor = '#19f2ff'; g.shadowBlur = 8;
+  for (let i = 0; i < t.length; i++) {
+    const wd = t[i] * k;
+    if (i % 2 === 0) { g.fillStyle = '#19f2ff'; g.fillRect(x, top, Math.max(1, wd), base - top); }
+    else { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(x, base, Math.max(1, wd), 1.5); }
+    x += wd;
+  }
+}
+function renderMonitor() {
+  const strip = $('#strip'), name = $('#monName'), kv = $('#monKv');
+  if (!M.last) {
+    strip.className = 'strip'; name.className = 'mon-name idle'; name.textContent = 'Nothing Yet'; kv.innerHTML = '';
+    $('#monSub').textContent = link.mode === 'off' ? 'Connect Revenant' : 'Press a remote at Revenant';
+    drawWave($('#wave'), null);
+    return;
+  }
+  const g = guess(M.last);
+  const cls = M.isNew ? 'new' : 'same';
+  strip.className = 'strip ' + cls;
+  name.className = 'mon-name ' + cls;
+  name.textContent = g.name + (M.isNew ? '  New' : '  Same');
+  const total = M.last.reduce((a, b) => a + b, 0);
+  kv.innerHTML = '';
+  const rows = [['Press', '#' + M.newCount], ['Frames', String(M.burst)], ['Timings', String(M.last.length) + (g.bits != null ? '  ' + g.bits + ' bits' : '')],
+    ['Length', (total / 1000).toFixed(1) + ' ms'], ['Lead', M.last[0] + ' / ' + M.last[1] + ' us']];
+  const mm = matchFor(M.cons || M.last);
+  const ok = mm.exact.length > 0;
+  kv.append(h('span', {}, 'Match'), h('span', { style: 'font-weight:700;color:' + (ok ? '#4dff9a' : '#ffb347') }, ok ? mm.exact.map((x) => x.d.name + ' · ' + x.b.label).join(', ') + (mm.partial ? ' (' + (mm.shapeNote || 'partial') + ')' : '') : mm.ambiguous ? 'Could be ' + mm.ambiguous.map((x) => x.b.label).join(' or ') : 'No match'));
+  if (!ok && mm.shapeNote) kv.append(h('span', {}, 'Shape'), h('span', { style: 'opacity:.8' }, mm.shapeNote));
+  if (!ok && !mm.ambiguous && mm.best) {
+    const b = mm.best;
+    kv.append(h('span', {}, 'Closest'), h('span', { style: 'opacity:.8' }, b.d.name + ' · ' + b.b.label + ' (' + (b.lenDiff ? b.lenDiff + ' timings apart' : 'off by ' + b.off + ' us') + ')'));
+  }
+  if (ok) {
+    const mapped = mm.exact.find((x) => x.b.map && x.b.map.to.length);
+    const fresh = M.firedAt && performance.now() - M.firedAt < 2500 && M.firedAt >= M.lastAt - 50;
+    kv.append(h('span', {}, 'Rule'), h('span', {}, fresh ? 'Sent ' + M.fired : mapped ? 'Mapped to ' + mapped.b.map.to.length + ', waiting' : 'No mapping'));
+  }
+  for (const [k, v] of rows) kv.append(h('span', {}, k), h('span', {}, v));
+  $('#monSub').textContent = 'Last press';
+  drawWave($('#wave'), M.last);
+  const hist = $('#hist');
+  hist.innerHTML = '';
+  for (const e of M.hist) hist.append(h('li', {}, h('span', { class: 'dot ' + (e.isNew ? 'new' : 'same') }), e.g.name, h('span', { style: 'margin-left:auto;' + (e.match ? 'color:#4dff9a' : 'opacity:.7') }, e.match || ('no match, ' + e.n + ' timings'))));
+}
+
+// ============================================================ rendering: link, sync, devices
+function renderLink() {
+  const on = link.mode !== 'off';
+  $('#led').className = 'led ' + (isLive() ? 'on' : link.mode === 'demo' ? 'demo' : '');
+  $('#linkText').textContent = isLive() ? 'Revenant Connected' + (link.mode === 'wifi' ? ' · Wi-Fi' : '') + (link.kb ? ' · Keyboard Paired' : '') : link.mode === 'demo' ? 'Demo Mode' : 'Not Connected';
+  $('#btnConnect').textContent = isLive() ? 'Disconnect' : 'Connect Revenant';
+  $('#btnDemo').textContent = link.mode === 'demo' ? 'Leave Demo' : 'Demo Mode';
+  $('#btnSim').hidden = link.mode !== 'demo';
+  for (const id of ['#btnSaveStick', '#btnLoadStick']) $(id).disabled = !on;
+  renderSync();
+  renderMonitor();
+  renderFw();
+  renderWifi();
+}
+function renderSync() {
+  const el = $('#sync');
+  if (link.mode === 'off') { el.textContent = ''; return; }
+  if (link.locked) { el.innerHTML = '<b>Press the front button on Revenant</b>'; return; }
+  const same = stickJson != null && stickJson === asciiJson(S);
+  el.innerHTML = same ? 'Revenant Settings In Sync' : '<b>Revenant Settings Differ</b>';
+}
+function renderDevices() {
+  const box = $('#devList');
+  box.innerHTML = '';
+  for (const d of S.devices) {
+    box.append(h('button', { class: 'tape' + (d.id === ui.sel ? ' sel' : ''), onclick: () => { ui.sel = d.id; ui.pick = null; renderAll(); } },
+      h('div', { class: 'nm' }, d.name), h('div', { class: 'ct' }, d.buttons.length + ' Buttons')));
+  }
+  $('#devCount').textContent = S.devices.length + ' On Deck';
+}
+
+// ============================================================ board
+let cellPx = 72;
+function renderBoard() {
+  const d = cur();
+  const board = $('#board');
+  board.innerHTML = '';
+  if (!d) { $('#devTitle').textContent = 'No Device'; return; }
+  $('#devTitle').textContent = d.name;
+  $('#btnLearn').hidden = d.kind === 'kb';
+  $('#btnAddKey').hidden = d.kind !== 'kb';
+  const avail = Math.max(240, $('#boardWrap').clientWidth - 8);
+  cellPx = Math.max(54, Math.min(88, Math.floor(avail / d.cols)));
+  document.documentElement.style.setProperty('--cell', cellPx + 'px');
+  const rows = rowsFor(d);
+  board.style.width = cellPx * d.cols + 'px';
+  board.style.height = cellPx * rows + 'px';
+  board.classList.toggle('edit', ui.edit);
+  $('#editSwitch').classList.toggle('on', ui.edit);
+  $('#mapSwitch').classList.toggle('on', ui.map);
+  if (!d.buttons.length) {
+    board.style.height = 'auto';
+    board.append(h('div', { class: 'empty' }, h('b', {}, 'Empty Remote'),
+      'Learn buttons from the real remote, or import a ready made set from the Code Library.'));
+  }
+  for (const b of d.buttons) {
+    const el = h('button', { class: 'rb' + (ui.pick === b.id || (ui.map && ui.src === b.id) ? ' picked' : ''), 'data-id': b.id,
+      style: 'left:' + b.col * cellPx + 'px;top:' + b.row * cellPx + 'px;width:' + (b.w * cellPx - 8) + 'px;height:' + (b.h * cellPx - 8) + 'px;--c:' + ROLE_RGB[roleOf(b.label, d.kind)] },
+      h('span', {}, b.label), ...(b.map && b.map.to.length ? [h('i', { class: 'badge' }, String(b.map.to.length))] : []));
+    board.append(el);
+  }
+  $('#boardNote').textContent = ui.map ? 'Map Mode is on. Tap a learned button, or press it on the real remote, then pick what it should send. Revenant does the rest by itself.' : ui.edit ? 'Layout Mode is on. Drag a button to move it, tap one to edit it. Buttons do not send while you edit.'
+    : d.kind === 'kb' ? 'Tap a key to send it over Bluetooth to whatever Revenant is paired with. On the Apple TV open Settings, Remotes And Devices, Bluetooth and pick Revenant Keyboard.'
+    : (link.mode === 'off' ? 'Connect Revenant, then tap a button to send its code.' : 'Tap a button to send its code out of Revenant.');
+  renderInspector();
+  renderMapPanel();
+}
+function fire(id) {
+  const el = $('.rb[data-id="' + id + '"]');
+  if (!el) return;
+  el.classList.remove('fire'); void el.offsetWidth; el.classList.add('fire');
+}
+async function press(b) {
+  fire(b.id);
+  if (link.mode === 'off') { toast('Connect Revenant first', 'bad'); return; }
+  const name = (b.label.replace(/[^A-Za-z0-9]+/g, '_') || 'Button').slice(0, 20);
+  if (b.out) {
+    try { await request(lineFor(b.out), ['SENT']); }
+    catch (e) { toast(/not paired/.test(e.message) ? 'Pair Revenant with the Apple TV first' : 'Send failed: ' + e.message, 'bad'); }
+    return;
+  }
+  try { await request('SEND ' + name + ' ' + b.hz + ' ' + b.rep + ' ' + b.gap + ' ' + b.t.join(' '), ['SENT']); }
+  catch (e) { toast('Send failed: ' + e.message, 'bad'); }
+}
+
+// drag with a floating clone, the original fades, the drop bounces
+const drag = { id: null, el: null, sx: 0, sy: 0, moved: false, clone: null, ghost: null, ox: 0, oy: 0, w: 0, hh: 0, tgt: null };
+function boardPointerDown(ev) {
+  const el = ev.target.closest('.rb');
+  if (!el) return;
+  const id = el.dataset.id;
+  if (ui.map) { pickSource(id); return; }
+  if (!ui.edit) { const b = cur().buttons.find((x) => x.id === id); if (b) press(b); return; }
+  ev.preventDefault();
+  Object.assign(drag, { id, el, sx: ev.clientX, sy: ev.clientY, moved: false });
+  window.addEventListener('pointermove', dragMove);
+  window.addEventListener('pointerup', dragEnd);
+  window.addEventListener('pointercancel', dragEnd);
+}
+function dragMove(ev) {
+  if (!drag.moved) {
+    if (Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 5) return;
+    drag.moved = true;
+    const r = drag.el.getBoundingClientRect();
+    drag.ox = ev.clientX - r.left; drag.oy = ev.clientY - r.top; drag.w = r.width; drag.hh = r.height;
+    drag.clone = drag.el.cloneNode(true);
+    drag.clone.classList.add('drag-clone');
+    drag.clone.style.cssText += ';left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
+    document.body.append(drag.clone);
+    drag.el.classList.add('drag-fading');
+    drag.ghost = h('div', { class: 'ghost' });
+    $('#board').append(drag.ghost);
+  }
+  drag.clone.style.left = ev.clientX - drag.ox + 'px';
+  drag.clone.style.top = ev.clientY - drag.oy + 'px';
+  const d = cur(), b = d.buttons.find((x) => x.id === drag.id);
+  const br = $('#board').getBoundingClientRect();
+  let col = Math.round((ev.clientX - drag.ox - br.left) / cellPx), row = Math.round((ev.clientY - drag.oy - br.top) / cellPx);
+  col = Math.max(0, Math.min(d.cols - b.w, col)); row = Math.max(0, Math.min(rowsFor(d) - b.h, row));
+  const hit = overlaps(d, col, row, b.w, b.h, b.id);
+  const ok = hit.length === 0 || (hit.length === 1 && hit[0].w === b.w && hit[0].h === b.h);
+  drag.tgt = { col, row, ok, swap: hit.length === 1 ? hit[0] : null };
+  Object.assign(drag.ghost.style, { left: col * cellPx + 'px', top: row * cellPx + 'px', width: b.w * cellPx - 8 + 'px', height: b.h * cellPx - 8 + 'px' });
+  drag.ghost.classList.toggle('bad', !ok);
+}
+function dragEnd() {
+  window.removeEventListener('pointermove', dragMove);
+  window.removeEventListener('pointerup', dragEnd);
+  window.removeEventListener('pointercancel', dragEnd);
+  const d = cur(), b = d.buttons.find((x) => x.id === drag.id);
+  if (!drag.moved) { ui.pick = drag.id; renderBoard(); return; }
+  if (drag.clone) drag.clone.remove();
+  if (drag.ghost) drag.ghost.remove();
+  drag.el.classList.remove('drag-fading');
+  const t = drag.tgt;
+  if (b && t && t.ok) {
+    if (t.swap) { t.swap.col = b.col; t.swap.row = b.row; }
+    b.col = t.col; b.row = t.row;
+    persist();
+  }
+  ui.pick = drag.id;
+  renderBoard();
+  const el = $('.rb[data-id="' + drag.id + '"]');
+  if (el) el.classList.add('bounce');
+  drag.moved = false;
+}
+
+function renderInspector() {
+  const box = $('#inspector');
+  const d = cur();
+  const b = d && ui.edit ? d.buttons.find((x) => x.id === ui.pick) : null;
+  box.classList.toggle('hidden', !(ui.edit && d));
+  box.innerHTML = '';
+  if (!ui.edit || !d) return;
+  const num = (label, val, min, max, set) => h('label', { class: 'f' }, label,
+    h('input', { class: 'i', type: 'number', min, max, value: val, onchange: (e) => { set(Math.max(min, Math.min(max, Number(e.target.value) || min))); persist(); renderBoard(); } }));
+  // device settings
+  box.append(h('div', { class: 'fields' },
+    h('label', { class: 'f' }, 'Device Name', h('input', { class: 'i', value: d.name, onchange: (e) => { d.name = e.target.value.trim() || d.name; persist(); renderAll(); } })),
+    num('Columns', d.cols, 2, 10, (v) => { d.cols = v; for (const x of d.buttons) { x.w = Math.min(x.w, v); x.col = Math.min(x.col, v - x.w); } }),
+    d.kind === 'kb' ? h('label', { class: 'f' }, 'Device', h('span', { class: 'note' }, 'Built in')) : h('label', { class: 'f' }, 'Device', h('button', { class: 'btn small danger', onclick: () => confirmBox('Delete ' + d.name + ' and all its buttons?', () => { S.devices = S.devices.filter((x) => x !== d); ui.sel = S.devices[0] ? S.devices[0].id : null; persist(); renderAll(); }) }, 'Delete Device'))));
+  if (!b) { box.append(h('p', { class: 'note' }, 'Tap a button to edit it.')); return; }
+  box.append(h('div', { class: 'fields' },
+    h('label', { class: 'f' }, 'Button Label', h('input', { class: 'i', value: b.label, onchange: (e) => { b.label = e.target.value.trim() || b.label; persist(); renderBoard(); } })),
+    ...(b.out ? [] : [num('Repeat Frames', b.rep, 1, 20, (v) => { b.rep = v; }),
+      num('Carrier Hz', b.hz, 20000, 60000, (v) => { b.hz = v; })]),
+    num('Width', b.w, 1, 3, (v) => { if (!overlaps(d, b.col, b.row, Math.min(v, d.cols - b.col), b.h, b.id).length) b.w = Math.min(v, d.cols - b.col); }),
+    num('Height', b.h, 1, 3, (v) => { if (!overlaps(d, b.col, b.row, b.w, v, b.id).length) b.h = v; })));
+  box.append(h('div', { class: 'row' },
+    h('button', { class: 'btn small', onclick: () => press(b) }, 'Test Send'),
+    ...(b.out ? [] : [h('button', { class: 'btn small hot', onclick: () => openLearn(b) }, 'Re-Learn')]),
+    h('button', { class: 'btn small danger', onclick: () => { d.buttons = d.buttons.filter((x) => x !== b); ui.pick = null; persist(); renderAll(); } }, 'Delete Button')),
+    h('p', { class: 'note', style: 'margin:10px 0 0' }, b.out ? 'Bluetooth output: ' + lineFor(b.out) : b.t.length + ' timings. Source: ' + (b.src || 'Learned')));
+}
+
+// ============================================================ modals
+function modal(build, opts) {
+  const locked = !!(opts && opts.locked);  // a window that must not be dismissed mid task
+  const veil = h('div', { class: 'veil', onmousedown: (e) => { if (e.target === veil && !locked) close(); } });
+  const box = h('div', { class: 'glass modal' });
+  veil.append(box);
+  const onKey = (e) => {
+    if (!box.isConnected) { document.removeEventListener('keydown', onKey, true); return; }
+    if (e.key === 'Escape' && !locked) { e.preventDefault(); close(); }
+  };
+  const close = () => { document.removeEventListener('keydown', onKey, true); veil.remove(); learn.active = false; learn.onGot = null; };
+  document.addEventListener('keydown', onKey, true);
+  if (!locked) box.append(h('button', { class: 'modal-x', type: 'button', title: 'Close', 'aria-label': 'Close', onclick: close }, '×'));
+  build(box, close);
+  document.body.append(veil);
+  return close;
+}
+function confirmBox(msg, yes) {
+  modal((box, close) => {
+    box.append(h('h3', {}, 'Are You Sure'), h('p', { class: 'note' }, msg),
+      h('div', { class: 'row', style: 'margin-top:14px' },
+        h('button', { class: 'btn danger', onclick: () => { close(); yes(); } }, 'Yes'), h('button', { class: 'btn', onclick: close }, 'Cancel')));
+  });
+}
+function openAddDevice() {
+  modal((box, close) => {
+    const name = h('input', { class: 'i', style: 'width:100%', placeholder: 'Device Name' });
+    const go = () => { const n = name.value.trim(); if (!n) return; const d = mkDevice(n); S.devices.push(d); ui.sel = d.id; persist(); close(); renderAll(); };
+    name.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+    box.append(h('h3', {}, 'Add Device'), name, h('div', { class: 'row', style: 'margin-top:14px' },
+      h('button', { class: 'btn hot', onclick: go }, 'Add'), h('button', { class: 'btn', onclick: close }, 'Cancel')));
+    setTimeout(() => name.focus(), 50);
+  });
+}
+function carrierFor(g) { return g.name === 'Sony' ? 40000 : g.name === 'Panasonic' ? 37000 : 38000; }
+function openLearn(existing) {
+  if (!isLive() && link.mode !== 'demo') { toast('Connect Revenant first, it listens for the remote', 'bad'); return; }
+  const d = cur();
+  modal((box, close0) => {
+    let got = null, saved = 0, cand = null, all = [], confirmed = false, pressFrames = [], timer = null, dec = null, rawCons = null;
+    const label = h('input', { class: 'i', style: 'width:100%', placeholder: 'Button Label', value: existing ? existing.label : '' });
+    const cv = h('canvas', { style: 'width:100%;height:54px;display:block;border-radius:10px;background:rgba(0,0,0,.45);margin:8px 0' });
+    const info = h('div', { class: 'kv' });
+    const save = h('button', { class: 'btn hot', disabled: true }, existing ? 'Replace Code' : 'Save');
+    const done = h('button', { class: 'btn' }, 'Done');
+    const stepEls = ['1   Press and hold the button', '2   Press it again to confirm', '3   Name it and save'].map((t) => h('div', { style: 'font-size:12px;letter-spacing:.06em;padding:2px 0' }, t));
+    const verdict = h('div', { style: 'font-size:22px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;text-align:center;margin:10px 0 2px' }, 'Ready');
+    const hint = h('div', { style: 'text-align:center;font-size:12px;color:var(--dim);min-height:2.6em' }, 'Press a button on the real remote, pointed at Revenant.');
+    const COLORS = { ready: '#19f2ff', listen: '#19f2ff', good: '#4dff9a', warn: '#ffb347', bad: '#ff6b8a' };
+    const show = (kind, title, msg, step) => {
+      verdict.textContent = title; verdict.style.color = COLORS[kind]; verdict.style.textShadow = '0 0 14px ' + COLORS[kind];
+      hint.textContent = msg;
+      stepEls.forEach((el, i) => { el.style.opacity = i + 1 === step ? '1' : i + 1 < step ? '0.55' : '0.3'; el.style.color = i + 1 === step ? 'var(--cyan)' : ''; });
+    };
+    const reset = () => { got = cand = dec = rawCons = null; all = []; confirmed = false; pressFrames = []; info.innerHTML = ''; cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); save.disabled = true; };
+    show('ready', 'Ready', 'Press a button on the real remote, pointed at Revenant.', 1);
+    const close = () => { clearTimeout(timer); close0(); };
+    learn.active = true;
+    // a press is over when the remote has been quiet for a moment, only then is it judged, so the words never flicker
+    function finish() {
+      if (!box.isConnected || !pressFrames.length) return;
+      const R = consensus(pressFrames);
+      const d2 = decodeFrames(pressFrames);
+      if (d2) {  // a known protocol: judged by its decoded bits, saved as a clean rebuilt copy
+        if (dec && dec.key !== d2.key) { show('bad', 'Different', 'That press decoded to a different code than the first. Press the button again.', 2); dec = d2; rawCons = R; cand = d2.code.t; got = cand; confirmed = false; }
+        else { dec = d2; rawCons = R; cand = d2.code.t; got = cand; confirmed = true; show('good', 'Recognised', d2.name + ', address ' + hex2(d2.addr) + ', command ' + hex2(d2.cmd) + '. A clean copy will be saved. Type a name and press Enter.', 3); }
+        info.innerHTML = '';
+        for (const [k, v] of [['Protocol', d2.name], ['Address', hex2(d2.addr)], ['Command', hex2(d2.cmd)], ['Frames', d2.agree + ' of ' + pressFrames.length + ' agree']]) info.append(h('span', {}, k), h('span', {}, v));
+        drawWave(cv, got);
+        save.disabled = false;
+        label.focus();
+        return;
+      }
+      dec = null; rawCons = null;
+      const key = shapeOf(R);
+      const agree = pressFrames.filter((x) => shapeOf(x) === key).length;
+      const longest = Math.max(...pressFrames.map((x) => x.length));
+      const solid = agree >= 2 && R.length >= longest * 0.9;
+      if (!cand) {
+        cand = R; all = pressFrames.slice(); confirmed = false;
+        if (solid) show('good', 'Good copy', 'Press the same button once more to confirm it.', 2);
+        else show('warn', 'Weak copy', 'Hold the button a second longer, aimed straight at Revenant, then press it again.', 2);
+      } else if (frameMatch(R, cand) === 1 || shapeDist(R, cand) <= tune.shape || shapeOf(R) === shapeOf(cand)) {
+        all = all.concat(pressFrames); cand = consensus(all); confirmed = true;
+        show('good', 'Confirmed', 'Two presses agree. Type a name and press Enter.', 3);
+      } else {
+        cand = R; all = pressFrames.slice(); confirmed = false;
+        show('bad', 'Different', 'That press did not match the first one. Press the button again.', 2);
+      }
+      got = cand;
+      const g = guess(got);
+      info.innerHTML = '';
+      for (const [k, v] of [['Protocol', g.name], ['Timings', String(got.length)], ['Frames', agree + ' of ' + pressFrames.length + ' agree'], ['Confirmed', confirmed ? 'Yes' : 'Not yet']]) info.append(h('span', {}, k), h('span', {}, v));
+      drawWave(cv, got);
+      save.disabled = false;
+      label.focus();
+    }
+    learn.onGot = (f, first) => {
+      if (first) pressFrames = [];
+      pressFrames.push(f);
+      show('listen', 'Listening', 'Keep holding the button.', cand ? 2 : 1);
+      clearTimeout(timer);
+      timer = setTimeout(finish, 450);
+    };
+    const doSave = () => {
+      if (!got || save.disabled) return;
+      const g = guess(got);
+      const code = dec ? dec.code : g.name === 'Sony' ? { hz: 40000, t: got, rep: 3, gap: Math.max(5, Math.round((45000 - got.reduce((a, b) => a + b, 0)) / 1000)) } : { hz: carrierFor(g), t: got, rep: 1, gap: 0 };
+      let mcopy = dec && rawCons ? rawCons : undefined;
+      if (!dec && tune.excess) {  // undo the receiver's pulse distortion in the copy that will be sent, keep the raw copy for recognising the remote
+        mcopy = got.slice();
+        code.t = got.map((v, i) => (i % 2 === 0 ? v + tune.excess : Math.max(100, v - tune.excess)));
+      }
+      if (existing) {
+        Object.assign(existing, { hz: code.hz, t: code.t, rep: code.rep, gap: code.gap, src: 'Learned', m: mcopy });
+        if (label.value.trim()) existing.label = label.value.trim();
+        persist(); close(); renderAll(); toast('Saved', 'good');
+        return;
+      }
+      const nb = mkButton(label.value.trim() || 'Button', code, 0, 0, 'Learned');
+      if (mcopy) nb.m = mcopy;
+      addButtons(d, [nb]); ui.pick = nb.id; saved++;
+      persist(); renderAll();
+      toast('Saved ' + nb.label, 'good');
+      label.value = '';
+      reset();
+      show('ready', 'Saved', saved + ' saved. Press the next button, or click Done.', 1);
+      done.classList.add('hot');
+    };
+    save.addEventListener('click', doSave);
+    done.addEventListener('click', close);
+    label.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
+    box.append(h('h3', {}, existing ? 'Re-Learn Button' : 'Learn Buttons'), h('div', {}, ...stepEls), verdict, hint, cv, info,
+      h('label', { class: 'f', style: 'margin-top:12px' }, 'Button Label', label),
+      h('div', { class: 'row', style: 'margin-top:14px' }, save, done));
+    if (link.mode === 'demo') box.append(h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn small', onclick: simulatePress }, 'Simulate A Press')));
+  });
+}
+
+function openAddKey() {
+  const d = cur();
+  modal((box, close0) => {
+    let added = 0;
+    const filter = h('input', { class: 'i', style: 'width:100%', placeholder: 'Type To Filter, Enter Adds The First Match' });
+    const list = h('div', { style: 'max-height:46vh;overflow:auto;margin-top:10px' });
+    const done = h('button', { class: 'btn' }, 'Done');
+    const close = close0;
+    const have = () => new Set(d.buttons.filter((b) => b.out).map((b) => b.label));
+    const add = (label, out) => {
+      addButtons(d, [mkOut(label, out, 0, 0)]);
+      added++; persist(); renderAll();
+      done.disabled = false; done.classList.add('hot'); done.textContent = 'Done (' + added + ' Added)';
+      draw();
+    };
+    function draw() {
+      list.innerHTML = '';
+      const q = filter.value.trim().toLowerCase(), hv = have();
+      let first = null;
+      for (const [grp, items] of KEYCAT) {
+        const m = items.filter(([l]) => !q || l.toLowerCase().includes(q) || grp.toLowerCase().includes(q));
+        if (!m.length) continue;
+        list.append(h('div', { class: 'note', style: 'margin:10px 0 6px' }, grp));
+        const row = h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px' });
+        for (const [l, o] of m) {
+          if (!first && !hv.has(l)) first = [l, o];
+          row.append(h('button', { class: 'btn small', style: hv.has(l) ? 'opacity:.45' : '', onclick: () => add(l, o) }, l));
+        }
+        list.append(row);
+      }
+      list._first = first;
+    }
+    filter.addEventListener('input', draw);
+    filter.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (list._first) { add(list._first[0], list._first[1]); filter.value = ''; draw(); } } });
+    done.addEventListener('click', close);
+    box.append(h('h3', {}, 'Add Keys'), filter, list, h('div', { class: 'row', style: 'margin-top:14px' }, done));
+    draw();
+    setTimeout(() => filter.focus(), 50);
+  });
+}
+
+// ============================================================ mapping
+function destIndex() {
+  const m = new Map();
+  for (const d of S.devices) for (const b of d.buttons) m.set(b.id, { b, d });
+  return m;
+}
+function pickSource(id) {
+  const x = destIndex().get(id);
+  if (!x) return;
+  if (!x.b.t || x.b.t.length < 2) { toast('Only learned remote buttons can start a mapping', 'bad'); return; }
+  ui.src = id; ui.unknown = false; renderBoard();
+}
+function autoPickSource(t, first) {
+  const mm = matchFor(t);
+  if (mm.exact.length) { const x = mm.exact[0]; ui.sel = x.d.id; ui.src = x.b.id; ui.unknown = false; ui.pick = null; renderAll(); return; }
+  if (first) { ui.src = null; ui.unknown = true; renderMapPanel(); }
+}
+function renderMapPanel() {
+  const box = $('#mapPanel');
+  box.innerHTML = '';
+  box.classList.toggle('hidden', !ui.map);
+  if (!ui.map) return;
+  const idx = destIndex();
+  const sx = ui.src && idx.get(ui.src);
+  if (!sx) {
+    box.append(h('p', { class: 'note', style: 'margin:0' }, ui.unknown ? 'Revenant heard a button that is not on any remote yet. Learn it first with Learn Button.'
+      : link.mode === 'off' ? 'Tap a learned button above to choose what it sends. Connect Revenant to pick by pressing the real remote.'
+      : 'Press a button on the real remote, or tap a learned button above.'));
+    return;
+  }
+  const src = sx.b;
+  if (!src.map) src.map = { to: [], hold: false };
+  const m = src.map;
+  const commit = () => { if (!m.to.length) src.map = undefined; persist(); renderBoard(); };
+  box.append(h('div', { class: 'mp-title' }, 'When ', h('b', {}, src.label), ' on ' + sx.d.name + ' is pressed, send'));
+  const cur = h('div', { class: 'mp-row' });
+  const have = m.to.filter((id) => idx.has(id));
+  if (!have.length) cur.append(h('span', { class: 'note' }, 'Nothing yet. Pick a device, then tap the buttons it should send.'));
+  for (const id of have) {
+    const x = idx.get(id);
+    cur.append(h('button', { class: 'btn small hot', title: 'Remove', onclick: () => { m.to = m.to.filter((q) => q !== id); commit(); } }, x.b.label + ' · ' + x.d.name + '  ✕'));
+  }
+  box.append(cur);
+  box.append(h('div', { class: 'mp-row' }, h('label', { class: 'switch' + (m.hold ? ' on' : ''), onclick: () => { m.hold = !m.hold; commit(); } }, h('span', { class: 'trk' }), h('span', {}, 'Repeat While Held')),
+    have.length ? h('button', { class: 'btn small', onclick: () => { m.to = []; commit(); } }, 'Clear All') : ''));
+  let dd = S.devices.find((d) => d.id === ui.dest) || S.devices.find((d) => d.id !== sx.d.id) || S.devices[0];
+  box.append(h('div', { class: 'mp-lab' }, 'Send From'));
+  const tabs = h('div', { class: 'tabs', role: 'tablist' });
+  for (const d of S.devices) tabs.append(h('button', { class: 'tab' + (d.id === dd.id ? ' on' : ''), role: 'tab', 'aria-selected': d.id === dd.id ? 'true' : 'false', onclick: () => { ui.dest = d.id; try { localStorage.setItem('sr-lastdest', d.id); } catch (e) { /* ignore */ } renderMapPanel(); } }, d.name));
+  const chips = h('div', { class: 'tabbody mp-row' });
+  const list = dd.buttons.filter((b) => b.id !== src.id);
+  if (!list.length) chips.append(h('span', { class: 'note' }, 'This device has no buttons yet.'));
+  for (const b of list) {
+    const on = m.to.includes(b.id);
+    chips.append(h('button', { class: 'btn small' + (on ? ' hot' : ''), onclick: () => { m.to = on ? m.to.filter((q) => q !== b.id) : [...m.to, b.id]; commit(); } }, (on ? '✓ ' : '') + b.label));
+  }
+  box.append(h('div', { class: 'tabbox' }, tabs, chips));
+}
+function actionFor(b) {
+  if (b.out) {
+    const o = b.out;
+    return o.k === 'key' ? 'K ' + (o.m | 0) + ' ' + (o.c | 0) : o.k === 'cons' ? 'C ' + (o.u | 0) : 'M ' + (o.b | 0) + ' ' + (o.x | 0) + ' ' + (o.y | 0) + ' ' + (o.w | 0);
+  }
+  return 'I ' + b.hz + ' ' + b.rep + ' ' + b.gap + ' ' + b.t.join(' ');
+}
+function compileMaps() {
+  const idx = destIndex(), lines = [];
+  for (const d of S.devices) for (const b of d.buttons) {
+    if (!b.map || !b.map.to.length || !b.t || b.t.length < 3) continue;
+    const dests = b.map.to.map((id) => idx.get(id)).filter(Boolean).slice(0, 8);
+    if (!dests.length) continue;
+    const name = dests.map((x) => x.b.label).join('+').replace(/[|\r\n]/g, ' ').slice(0, 22);
+    lines.push('MAPR R|' + name + '|' + (b.map.hold ? 1 : 0) + '|' + (b.m && b.m.length >= 3 ? b.m : b.t).join(' ') + '|' + dests.map((x) => actionFor(x.b)).join('|'));
+  }
+  return lines.slice(0, 64);
+}
+
+// ============================================================ learning settings
+function tuneName() {
+  for (const [k, p] of Object.entries(TUNE_PRESETS)) if (p.abs === tune.abs && p.pct === tune.pct && p.prefix === tune.prefix && p.noise === tune.noise && p.gap === tune.gap && p.shape === tune.shape) return k;
+  return 'Custom';
+}
+function applyTune(patch) {
+  Object.assign(tune, patch);
+  try { localStorage.setItem('sr-tune', JSON.stringify(tune)); } catch (e) { /* ignore */ }
+  renderTune(); renderMonitor();
+  if (isLive() && link.tuneOk) writeLine('TUNE ' + tune.abs + ' ' + tune.pct + ' ' + (tune.prefix ? 1 : 0) + ' ' + tune.noise + ' ' + tune.gap + ' ' + tune.shape + ' ' + tune.wait + ' ' + tune.rep + ' ' + tune.duty).catch((e) => toast('Could not send that to Revenant: ' + e.message, 'bad'));
+}
+function renderTune() {
+  const card = $('#tuneCard');
+  if (!card) return;
+  const cur = tuneName();
+  const box = $('#tunePresets');
+  box.innerHTML = '';
+  for (const [k] of Object.entries(TUNE_PRESETS)) box.append(h('button', { class: 'btn small' + (cur === k ? ' hot' : ''), style: 'width:100%', onclick: () => { const p = TUNE_PRESETS[k]; applyTune({ abs: p.abs, pct: p.pct, prefix: p.prefix, noise: p.noise, gap: p.gap, shape: p.shape }); } }, k));
+  $('#tuneNote').textContent = cur === 'Custom' ? 'Custom settings. Pick a preset to go back to one of the standard ones.' : TUNE_PRESETS[cur].why;
+  const f = $('#tuneFields');
+  f.innerHTML = '';
+  const num = (label, hint, key, min, max, step) => h('label', { class: 'f' }, label, h('input', { class: 'i', type: 'number', min, max, step, value: tune[key], title: hint, onchange: (e) => applyTune({ [key]: Math.max(min, Math.min(max, Number(e.target.value) || min)) }) }), h('span', { class: 'note', style: 'margin:0' }, hint));
+  f.append(
+    h('div', { class: 'mp-lab', style: 'margin:14px 0 4px' }, 'Sending'), h('p', { class: 'note', style: 'margin:0 0 6px' }, 'Whole device, applies to everything already learned and mapped, right away.'),
+    num('Send Repeats', 'How many times Revenant sends a code for each press. Real remotes send one frame per tap, and Sony codes carry their own count of six. Raise this only if a TV misses presses.', 'rep', 1, 5, 1),
+    h('label', { class: 'f' }, 'Send Strength', h('select', { class: 'i', onchange: (e) => applyTune({ duty: +e.target.value }) }, ...[[33, 'Standard'], [50, 'Strong'], [66, 'Maximum']].map(([v, l]) => h('option', { value: v, selected: tune.duty === v }, l))), h('span', { class: 'note', style: 'margin:0' }, 'Standard is one third on, what NEC and Sony remotes use. Strong and Maximum keep the light on longer, which reaches further. The LED current itself is set by Revenant hardware.')),
+    num('Pause Before Sending (ms)', 'After you press a remote, Revenant waits this long for it to go quiet before it sends, so the two never talk over each other. Raise it if the TV misses mapped presses.', 'wait', 0, 600, 20),
+    h('div', { class: 'mp-lab', style: 'margin:14px 0 4px' }, 'Learning'), h('p', { class: 'note', style: 'margin:0 0 6px' }, 'Applies to codes learned from now on.'),
+    num('Receiver Correction (us)', 'Revenant\'s receiver shortens pulses and stretches gaps by about this much. Learned codes get it added back, the way Arduino-IRremote handles it with its mark excess setting. Built in and decoded codes are exact already.', 'excess', 0, 300, 10),
+    num('Ignore Blips Under (us)', 'Tiny flickers shorter than this are thrown away. Lower it only if your remote uses very short pulses.', 'noise', 150, 800, 50),
+    h('div', { class: 'mp-lab', style: 'margin:14px 0 4px' }, 'Recognising'), h('p', { class: 'note', style: 'margin:0 0 6px' }, 'Applies to everything Revenant hears, right away.'),
+    num('Timing Wiggle Room (us)', 'How far a pulse may be off and still count as the same. Raise it if one button keeps showing as different.', 'abs', 100, 800, 50),
+    num('Long Pulse Wiggle (%)', 'The same idea for long pulses, which drift in proportion.', 'pct', 5, 35, 1),
+    num('Shape Matching (symbols)', 'Long presses are also compared by shape, short, medium or long. This many symbols may differ. Some remotes have buttons only two symbols apart, so keep this low or buttons get mixed up.', 'shape', 0, 8, 1),
+    h('label', { class: 'switch' + (tune.prefix ? ' on' : ''), style: 'margin:6px 0', onclick: () => applyTune({ prefix: !tune.prefix }) }, h('span', { class: 'trk' }), h('span', {}, 'Accept Cut Off Presses')),
+    h('label', { class: 'f' }, 'Gap That Ends A Press (ms)', h('select', { class: 'i', onchange: (e) => applyTune({ gap: +e.target.value }) }, ...[[0, '6'], [1, '12'], [2, '25']].map(([v, l]) => h('option', { value: v, selected: tune.gap === v }, l))), h('span', { class: 'note', style: 'margin:0' }, 'Raise it if one press arrives in pieces, lower it if two buttons blur together.')));
+}
+
+// ============================================================ firmware update
+// The newest build is looked for in two places: the folder this page is served from, and the online repo.
+// Whichever has the higher version wins, and this computer wins a tie, so a build made here beats an older online one.
+const REMOTE_FW = '';  // set to the repo's raw firmware folder, ending with a slash, for example https://raw.githubusercontent.com/NAME/REPO/main/web/firmware/
+const fw = { best: null, checking: false, busy: false };
+function verCmp(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; }
+  return 0;
+}
+async function getOffer(base, where) {
+  try {
+    const r = await fetch(base + 'version.json', { cache: 'no-store' });
+    if (!r.ok) return null;
+    const v = await r.json();
+    if (!v || !v.version || !v.file) return null;
+    return { version: String(v.version), url: base + v.file, size: v.size | 0, where };
+  } catch (e) { return null; }
+}
+async function checkFirmware() {
+  if (fw.checking) return;
+  fw.checking = true; renderFw();
+  const found = (await Promise.all([getOffer('firmware/', 'this computer'), REMOTE_FW ? getOffer(REMOTE_FW, 'online') : null])).filter(Boolean);
+  found.sort((a, b) => verCmp(b.version, a.version));  // stable sort keeps this computer first on a tie
+  fw.best = found[0] || null;
+  fw.checking = false; renderFw();
+}
+function renderFw() {
+  const info = $('#fwInfo'), btn = $('#btnFw'), note = $('#fwNote');
+  if (!info) return;
+  info.innerHTML = '';
+  const on = isLive();
+  const newer = on && link.fw && fw.best && verCmp(fw.best.version, link.fw) > 0;
+  info.append(h('span', {}, 'On Revenant'), h('span', {}, on ? (link.fw || '?') : 'Not Connected'),
+    h('span', {}, 'Newest'), h('span', {}, fw.checking ? 'Checking' : fw.best ? fw.best.version + ' (' + fw.best.where + ')' : 'None Found'));
+  btn.disabled = !(on && link.ota && fw.best) || fw.busy;
+  btn.classList.toggle('hot', !!(newer && link.ota));
+  btn.textContent = newer ? 'Update To ' + fw.best.version : 'Reinstall Firmware';
+  note.textContent = on && !link.ota ? 'This Revenant needs one update over the cable. After that it updates from here.'
+    : newer ? 'A newer firmware is ready. Settings and pairings stay as they are.' : '';
+}
+function waitLine(prefixes, ms) {
+  return new Promise((resolve, reject) => {
+    const w = { prefixes, resolve, reject, timer: setTimeout(() => { const i = link.pending.indexOf(w); if (i >= 0) link.pending.splice(i, 1); reject(new Error('Revenant stopped answering')); }, ms) };
+    link.pending.push(w);
+  });
+}
+async function runUpdate() {
+  const offer = fw.best;
+  if (!offer || !isLive() || fw.busy) return;
+  fw.busy = true; renderFw();
+  let setBar = () => {}, setMsg = () => {}, closeBox = () => {}, finish = () => {};
+  modal((box, close) => {
+    const bar = h('div', { style: 'height:10px;border-radius:6px;background:rgba(255,255,255,.1);overflow:hidden;margin:14px 0' }, h('div', { style: 'height:100%;width:100%;background:linear-gradient(90deg,#19f2ff,#ff2bd6);box-shadow:0 0 12px #ff2bd6;clip-path:inset(0 100% 0 0);transition:clip-path .2s' }));
+    const msg = h('p', { class: 'note' }, 'Getting the firmware');
+    const ok = h('button', { class: 'btn', disabled: true, onclick: close }, 'Close');
+    setBar = (f) => { bar.firstChild.style.clipPath = 'inset(0 ' + Math.round((1 - f) * 100) + '% 0 0)'; };
+    setMsg = (t) => { msg.textContent = t; };
+    closeBox = close;
+    finish = () => { ok.disabled = false; };
+    box.append(h('h3', {}, 'Updating Firmware ' + offer.version), bar, msg, h('div', { class: 'row', style: 'margin-top:10px' }, ok));
+  }, { locked: true });
+  try {
+    const r = await fetch(offer.url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('Could not download the firmware');
+    const bin = new Uint8Array(await r.arrayBuffer());
+    if (bin.length < 100000 || bin[0] !== 0xE9) throw new Error('That file is not a firmware image');
+    if (link.mode === 'wifi') {
+      link.pollPause = true;
+      setMsg('Sending over Wi-Fi, do not unplug Revenant');
+      await new Promise((resolve, reject) => {
+        const x = new XMLHttpRequest();
+        x.open('POST', 'http://' + link.addr + '/ota');
+        x.setRequestHeader('X-Revenant-Key', getKey());
+        x.timeout = 240000;
+        x.upload.onprogress = (e) => { if (e.lengthComputable) setBar(e.loaded / e.total); };
+        x.onload = () => (x.status === 200 && /OTADONE/.test(x.responseText) ? resolve() : reject(new Error((x.responseText || 'Revenant refused the update').trim())));
+        x.onerror = () => reject(new Error('Lost Revenant'));
+        x.ontimeout = () => reject(new Error('Revenant stopped answering'));
+        const fd = new FormData();
+        fd.append('firmware', new Blob([bin]), 'revenant.bin');
+        x.send(fd);
+      });
+      setBar(1);
+      setMsg('Done. Revenant is restarting and this page reconnects by itself.');
+      link.pollPause = false;
+      finish(); fw.busy = false; renderFw();
+      return;
+    }
+    setMsg('Telling Revenant to get ready');
+    await request('OTA ' + bin.length, ['OTAGO'], 20000);
+    const done = waitLine(['OTADONE'], 900000);  // the real limit is the idle check below, a slow link can take a few minutes
+    let lastProgress = performance.now();
+    let failed = null;
+    done.catch((e) => { failed = e; if (link.otaWake) link.otaWake(); });
+    link.otaAcked = 0;
+    const tick = () => { lastProgress = performance.now(); };
+    let sent = 0;
+    setMsg('Sending, keep Revenant close and do not unplug it');
+    while (sent < bin.length && !failed) {
+      while (sent - link.otaAcked >= 16384 && !failed) {
+        const before = link.otaAcked;
+        await new Promise((res) => { link.otaWake = res; setTimeout(res, 3000); });
+        if (link.otaAcked !== before) tick();
+        else if (performance.now() - lastProgress > 25000) throw new Error('Revenant stopped answering');
+      }
+      if (failed) break;
+      const chunk = bin.slice(sent, sent + 180);
+      await link.rx.writeValueWithResponse(chunk);  // confirmed writes, the fast kind drops packets while Revenant saves to flash
+      sent += chunk.length;
+      setBar(sent / bin.length);
+      if (link.otaAcked) tick();
+    }
+    link.otaWake = null;
+    if (failed) throw failed;
+    setMsg('Checking and installing');
+    tick();
+    await Promise.race([done, new Promise((_, rej) => { const iv = setInterval(() => { if (performance.now() - lastProgress > 40000) { clearInterval(iv); rej(new Error('Revenant stopped answering')); } }, 2000); done.then(() => clearInterval(iv), () => clearInterval(iv)); })]);
+    setBar(1);
+    setMsg('Done. Revenant is restarting. Connect again in a few seconds.');
+  } catch (e) {
+    link.pollPause = false;
+    setMsg('Update failed: ' + (e.message || e) + '. The old firmware is still on Revenant.');
+  }
+  finish(); fw.busy = false; renderFw();
+}
+
+// ============================================================ code library
+const IRDB = 'Lucaslhm/Flipper-IRDB';
+let irdb = null, libSel = null, libList = [];
+async function loadIndex() {
+  if (irdb) return irdb;
+  try {
+    const c = JSON.parse(localStorage.getItem('sr-irdb-index'));
+    if (c && Date.now() - c.at < 7 * 864e5 && c.paths.length) { irdb = c.paths; return irdb; }
+  } catch (e) { /* no cache */ }
+  $('#libSub').textContent = 'Loading Index';
+  const r = await fetch('https://api.github.com/repos/' + IRDB + '/git/trees/main?recursive=1');
+  if (!r.ok) throw new Error('Index request failed (' + r.status + ')');
+  const j = await r.json();
+  irdb = j.tree.filter((x) => x.type === 'blob' && x.path.endsWith('.ir') && !x.path.startsWith('_Converted_/')).map((x) => x.path);
+  try { localStorage.setItem('sr-irdb-index', JSON.stringify({ at: Date.now(), paths: irdb })); } catch (e) { /* too big or blocked */ }
+  $('#libSub').textContent = 'Online + Built In';
+  return irdb;
+}
+async function libSearch() {
+  const q = $('#libSearch').value.toLowerCase().split(/\s+/).filter(Boolean);
+  const ul = $('#libResults');
+  if (!q.length) { ul.innerHTML = ''; return; }
+  try {
+    const paths = await loadIndex();
+    libList = paths.filter((p) => { const l = p.toLowerCase().replace(/_/g, ' '); return q.every((w) => l.includes(w)); }).slice(0, 80);
+    ul.innerHTML = '';
+    if (!libList.length) { ul.append(h('li', {}, 'Nothing found')); return; }
+    for (const p of libList) {
+      const parts = p.replace(/\.ir$/, '').split('/');
+      ul.append(h('li', { onclick: () => libPick(p) }, (parts.slice(2).join(' ') || parts[parts.length - 1]).replace(/_/g, ' '), h('small', {}, parts.slice(0, 2).join(' / ').replace(/_/g, ' '))));
+    }
+  } catch (e) {
+    ul.innerHTML = '';
+    ul.append(h('li', {}, 'Could not reach the online library: ' + e.message));
+  }
+}
+async function libPick(path) {
+  const box = $('#libPreview');
+  box.innerHTML = '';
+  box.append(h('p', { class: 'note' }, 'Loading ' + path.split('/').pop() + ' ...'));
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/' + IRDB + '/main/' + path.split('/').map(encodeURIComponent).join('/'));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const entries = parseIr(await r.text());
+    const items = entries.map((e) => ({ label: pretty(e.name), code: entryToCode(e), on: true, proto: e.type === 'raw' ? 'Raw' : e.protocol }));
+    libShow(path, items);
+  } catch (e) { box.innerHTML = ''; box.append(h('p', { class: 'note' }, 'Could not load that file: ' + e.message)); }
+}
+function libShow(path, items) {
+  const box = $('#libPreview');
+  box.innerHTML = '';
+  const ok = items.filter((i) => !i.code.why);
+  const bad = items.filter((i) => i.code.why);
+  box.append(h('p', { class: 'note', style: 'margin:10px 0 0' }, h('b', {}, path.split('/').slice(-2).join(' / ').replace(/_/g, ' ')), '. ' + ok.length + ' buttons ready' + (bad.length ? ', ' + bad.length + ' use a format this tool cannot send yet.' : '.')));
+  const chips = h('div', { class: 'chips' });
+  for (const i of ok) { const p = h('span', { class: 'pill', title: i.proto, onclick: () => { i.on = !i.on; p.classList.toggle('off', !i.on); } }, i.label); chips.append(p); }
+  for (const i of bad) chips.append(h('span', { class: 'pill bad', title: 'Cannot send ' + i.code.why }, i.label));
+  const replace = h('input', { type: 'checkbox' });
+  box.append(chips, h('div', { class: 'row' },
+    h('button', { class: 'btn small hot', onclick: () => {
+      const d = cur();
+      if (!d) { toast('Add a device first', 'bad'); return; }
+      if (replace.checked) d.buttons = [];
+      const src = path.split('/').slice(-2).join(' / ').replace(/_/g, ' ').replace(/\.ir$/, '');
+      addButtons(d, ok.filter((i) => i.on).map((i) => mkButton(i.label, i.code, 0, 0, src)));
+      persist(); renderAll(); toast('Added to ' + d.name, 'good');
+    } }, 'Add To ' + (cur() ? cur().name : 'Device')),
+    h('label', { class: 'switch', style: 'text-transform:none;letter-spacing:.04em' }, replace, 'Replace Existing')));
+}
+// Every Apple code in the public Flipper-IRDB, grouped by the remote it came from. The second command byte is the remote ID.
+const APPLE_SETS = (() => {
+  const E = 'EE 87 00 00';
+  const tv = (id, sel, extra) => [['Menu', E, '02 ' + id], ['Play Pause', E, '5E ' + id], ['Up', E, '0B ' + id], ['Down', E, '0D ' + id], ['Left', E, '08 ' + id], ['Right', E, '07 ' + id], ['Select', E, sel + ' ' + id], ...(extra || [])];
+  const reboot = ['Reboot', E, '18 37 00 00'];
+  const pad = (c) => c + ' 00 00 00';
+  return [
+    { name: 'Apple TV Siri Remote (4K, 2nd gen)', btns: [['Power Off', 'E5 87 00 00', '2A FE 00 00'], ['Power On', 'E5 87 00 00', '2C FE 00 00'], ['TV', 'E5 87 00 00', '40 FE 00 00'], ['Ok', E, '5C 8C 00 00'], ['Up', E, '0A 8C 00 00'], ['Down', E, '0C 8C 00 00'], ['Left', E, '09 8C 00 00'], ['Right', E, '06 8C 00 00'], ['Back', E, '03 8C 00 00'], ['Play Pause', E, '5F 8C 00 00']] },
+    { name: 'Apple TV Remote (Gen 2, ID 8B)', btns: tv('8B', '04', [reboot]).map(fix) },
+    { name: 'Apple TV Remote (Gen 3, ID 0C)', btns: tv('0C', '5D', [reboot]).map(fix) },
+    { name: 'Apple TV Remote (Gen 3 v2, ID 2E)', btns: tv('2E', '5D', [reboot]).map(fix) },
+    { name: 'Apple TV Remote (ID 8E)', btns: [...tv('8E', '04').map(fix), ['Unpair', 'E0 87 00 00', '05 28 00 00']] },
+    { name: 'Apple Aluminum Remote (ID AA)', btns: [['Main', E, '5D AA 00 00'], ['Menu', E, '02 AA 00 00'], ['Play Pause', E, '5E AA 00 00'], ['Up', E, '0B AA 00 00'], ['Down', E, '0D AA 00 00'], ['Left', E, '08 AA 00 00'], ['Right', E, '07 AA 00 00']] },
+    { name: 'Apple iPod Remote', btns: [['Menu', E, pad('01')], ['Play Pause', E, pad('02')], ['Next', E, pad('03')], ['Previous', E, pad('04')], ['Volume Up', E, pad('05')], ['Volume Down', E, pad('06')]] },
+    { name: 'Apple iPod Hi-Fi Remote', btns: [['Next Track', '01 DE 00 00', pad('03')], ['Previous Track', '01 DE 00 00', pad('0B')], ['Next Chapter', '01 DE 00 00', pad('0C')], ['Prev Chapter', '01 DE 00 00', pad('0D')], ['Stop', '01 DE 00 00', pad('0E')], ['Play', '01 DE 00 00', pad('0F')], ['Pause', '01 DE 00 00', pad('10')], ['Mute', '01 DE 00 00', pad('11')], ['Next Playlist', '01 DE 00 00', pad('14')], ['Prev Playlist', '01 DE 00 00', pad('15')], ['Shuffle', '01 DE 00 00', pad('16')], ['Repeat', '01 DE 00 00', pad('18')], ['Power Off', '01 DE 00 00', pad('1A')], ['Power On', '01 DE 00 00', pad('1B')], ['Play Pause', '01 DE 00 00', pad('1F')], ['Volume 07', '01 DE 00 00', pad('07')], ['Volume 17', '01 DE 00 00', pad('17')]] },
+  ];
+  function fix(b) { return b.length === 3 && b[2].length === 5 ? [b[0], b[1], b[2] + ' 00 00'] : b; }
+})();
+const SONY_SETS = [
+  { name: 'Sony Receiver (STR-DH and similar, 15 bit)', protocol: 'SIRC15', btns: [['Power', '30 00 00 00', '15 00 00 00'], ['Volume Up', '30 00 00 00', '12 00 00 00'], ['Volume Down', '30 00 00 00', '13 00 00 00'], ['Mute', '30 00 00 00', '14 00 00 00'], ['Power On', '30 00 00 00', '2E 00 00 00'], ['Power Off', '30 00 00 00', '2F 00 00 00'], ['FM Tuner', '30 00 00 00', '18 00 00 00'], ['AM Tuner', '30 00 00 00', '1A 00 00 00'], ['CD', '30 00 00 00', '25 00 00 00'], ['Tape', '30 00 00 00', '23 00 00 00'], ['MD Tape', '30 00 00 00', '69 00 00 00'], ['DVD', '30 00 00 00', '7D 00 00 00']] },
+  { name: 'Sony Amp (older, 12 bit)', protocol: 'SIRC', btns: [['Power', '10 00 00 00', '15 00 00 00'], ['Volume Up', '10 00 00 00', '12 00 00 00'], ['Volume Down', '10 00 00 00', '13 00 00 00'], ['Mute', '10 00 00 00', '14 00 00 00'], ['Power On', '10 00 00 00', '2E 00 00 00'], ['Power Off', '10 00 00 00', '2F 00 00 00'], ['FM', '10 00 00 00', '18 00 00 00'], ['AM', '10 00 00 00', '1A 00 00 00'], ['Tuner', '10 00 00 00', '21 00 00 00'], ['Phono', '10 00 00 00', '20 00 00 00'], ['CD', '10 00 00 00', '25 00 00 00'], ['Aux', '10 00 00 00', '1D 00 00 00'], ['Video 1', '10 00 00 00', '22 00 00 00'], ['Video 2', '10 00 00 00', '1E 00 00 00'], ['Video 3', '10 00 00 00', '42 00 00 00'], ['DVD', '10 00 00 00', '7D 00 00 00'], ['Tape', '10 00 00 00', '23 00 00 00'], ['TV Sat', '10 00 00 00', '6A 00 00 00']] },
+];
+const BUILTIN_SETS = [...APPLE_SETS, ...SONY_SETS];
+function addAppleSet(set) {
+  const d = cur();
+  if (!d) return;
+  if (d.kind === 'kb') { toast('Pick an infrared device first, not the Bluetooth Keyboard', 'bad'); return; }
+  const list = set.btns.map(([label, address, command]) => mkButton(label, fromParsed({ protocol: set.protocol || 'NECext', address, command }), 0, 0, set.name));
+  addButtons(d, list);
+  persist(); renderAll(); toast('Added ' + list.length + ' buttons from ' + set.name + ' to ' + d.name, 'good');
+}
+function renderAppleSets() {
+  const box = $('#appleSets');
+  if (!box) return;
+  box.innerHTML = '';
+  for (const set of BUILTIN_SETS) box.append(h('button', { class: 'btn small', style: 'width:100%;text-align:left', onclick: () => addAppleSet(set) }, '+ ' + set.name + '  (' + set.btns.length + ')'));
+}
+
+// ============================================================ settings file
+function download() {
+  const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' })), download: 'revenant-settings.json' });
+  document.body.append(a); a.click(); a.remove();
+}
+async function upload(file) {
+  try {
+    const o = validState(JSON.parse(await file.text()));
+    if (!o) throw new Error('That is not a Revenant settings file');
+    S = o; ui.sel = S.devices[0] ? S.devices[0].id : null; persist(); renderAll(); toast('Settings loaded', 'good');
+  } catch (e) { toast(e.message, 'bad'); }
+}
+async function saveStick(quiet) {
+  try {
+    const json = asciiJson(S); await request('SAVE ' + json, ['SAVED'], 20000);
+    if (link.map) { await writeLines(['MAPBEGIN', ...compileMaps()]); await request('MAPEND', ['MAPSAVED'], 15000); }
+    stickJson = json; renderSync(); toast(quiet === true ? 'Auto saved to Revenant' : 'Saved to Revenant', 'good'); }
+  catch (e) { toast('Save failed: ' + e.message, 'bad'); }
+}
+async function loadStick() {
+  try {
+    const f = await request('LOAD', ['FILE'], 15000);
+    const body = f.slice(4).trim();
+    if (!body) { toast('Revenant has no saved settings yet'); return; }
+    const o = validState(JSON.parse(body));
+    if (!o) throw new Error('The saved file is not valid');
+    S = o; stickJson = body; ui.sel = S.devices[0].id; persist(); renderAll(); toast('Loaded from Revenant', 'good');
+  } catch (e) { toast('Load failed: ' + e.message, 'bad'); }
+}
+
+// ============================================================ wiring
+function renderAll() { renderDevices(); renderBoard(); renderLink(); }
+$('#board').addEventListener('pointerdown', boardPointerDown);
+$('#editSwitch').addEventListener('click', () => { ui.edit = !ui.edit; if (ui.edit) ui.map = false; if (!ui.edit) ui.pick = null; renderBoard(); });
+$('#mapSwitch').addEventListener('click', () => { ui.map = !ui.map; if (ui.map) { ui.edit = false; ui.pick = null; } renderBoard(); });
+$('#btnLearn').addEventListener('click', () => openLearn(null));
+$('#btnAddKey').addEventListener('click', openAddKey);
+$('#btnAddDev').addEventListener('click', openAddDevice);
+async function connectSmart() {
+  wantLink = true;
+  let last = '';
+  try { last = localStorage.getItem('sr-addr') || ''; } catch (e) { /* ignore */ }
+  $('#btnConnect').textContent = 'Connecting';
+  $('#btnConnect').disabled = true;
+  try {
+    if (last && location.protocol !== 'https:') {
+      for (const a of [...new Set([last, 'revenant.local'])]) { try { await connectWifi(a); return; } catch (e) { /* try the next address */ } }
+      toast('Revenant is not answering on Wi-Fi, looking for it over Bluetooth setup', 'bad');
+    }
+    await connectBle();
+  } finally { $('#btnConnect').disabled = false; renderLink(); }
+}
+$('#btnConnect').addEventListener('click', () => (isLive() ? disconnect() : link.mode === 'demo' ? startDemoToggle() : connectSmart()));
+function startDemoToggle() { disconnect(); }
+$('#btnDemo').addEventListener('click', () => (link.mode === 'demo' ? disconnect() : startDemo()));
+$('#btnSim').addEventListener('click', simulatePress);
+renderAppleSets();
+$('#btnSaveStick').addEventListener('click', () => saveStick());
+$('#btnWifi').addEventListener('click', () => {
+  const ssid = $('#wifiSsid').value.trim(), pass = $('#wifiPass').value;
+  if (!ssid) { toast('Type the network name first', 'bad'); return; }
+  link.wifiMsg = 'Joining'; renderWifi();
+  $('#wifiPass').type = 'password'; $('#btnEye').classList.remove('on');
+  try { localStorage.setItem('sr-ssid', ssid); } catch (e) { /* ignore */ }
+  writeLine('WIFI ' + ssid + '|' + pass).catch((e) => toast('Send failed: ' + e.message, 'bad'));
+});
+$('#btnEye').addEventListener('click', () => {
+  const inp = $('#wifiPass'), show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  $('#btnEye').classList.toggle('on', show);
+  $('#btnEye .slash').style.display = show ? 'none' : 'none';
+  $('#btnEye').title = show ? 'Hide Password' : 'Show Password';
+  inp.focus();
+});
+$('#wifiPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnWifi').click(); });
+$('#btnScan').addEventListener('click', scanWifi);
+$('#btnWifiOff').addEventListener('click', () => confirmBox('Forget this network? Revenant stops using Wi-Fi until you set it up again.', () => {
+  link.wifiMsg = ''; wantLink = false;
+  try { localStorage.removeItem('sr-addr'); localStorage.removeItem('sr-key'); } catch (e) { /* ignore */ }
+  writeLine('WIFIOFF').catch(() => {});
+}));
+$('#btnChange').addEventListener('click', () => {
+  const go = () => { link.changing = true; link.wifiMsg = ''; renderWifi(); if (!link.nets.length) scanWifi(); };
+  if (link.mode === 'wifi') confirmBox('Revenant will leave this network when you join another one. This computer has to be on the new network to find it again. Continue?', go);
+  else go();
+});
+try { $('#wifiSsid').value = localStorage.getItem('sr-ssid') || ''; } catch (e) { /* ignore */ }
+$('#btnTuneReset').addEventListener('click', () => { const p = TUNE_PRESETS.Balanced; applyTune({ abs: p.abs, pct: p.pct, prefix: p.prefix, noise: p.noise, gap: p.gap, shape: p.shape, wait: 60, rep: 1, duty: 33, excess: 300 }); });
+$('#btnFw').addEventListener('click', () => confirmBox('Install firmware ' + (fw.best ? fw.best.version : '') + ' on Revenant? It restarts when finished. Settings and pairings stay.', runUpdate));
+$('#autoSwitch').classList.toggle('on', autoSave);
+$('#autoSwitch').addEventListener('click', () => {
+  autoSave = !autoSave;
+  $('#autoSwitch').classList.toggle('on', autoSave);
+  try { localStorage.setItem('sr-autosave', autoSave ? '1' : '0'); } catch (e) { /* storage may be blocked */ }
+  if (autoSave && link.mode !== 'off' && stickJson !== asciiJson(S)) saveStick(true);
+});
+$('#btnLoadStick').addEventListener('click', loadStick);
+$('#btnDownload').addEventListener('click', download);
+$('#btnUpload').addEventListener('click', () => $('#fileIn').click());
+$('#fileIn').addEventListener('change', (e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; });
+$('#btnReset').addEventListener('click', () => confirmBox('Replace everything on this page with the starting set?', () => { S = defaultState(); ui.sel = S.devices[0].id; persist(); renderAll(); }));
+let libTimer = null;
+$('#libSearch').addEventListener('input', () => { clearTimeout(libTimer); libTimer = setTimeout(libSearch, 250); });
+window.addEventListener('resize', () => { renderBoard(); renderMonitor(); });
+renderAll();
+renderTune();
+checkFirmware();
+autoWifi();
+window.__sr = { BUILTIN_SETS, decodeFrames, decodeSirc, APPLE_SETS, shapeDist, shapeOf, consensus, frameMatch, matchFor, compileMaps, guess, fromParsed, parseIr, entryToCode, nec, sirc, rc5, appleButtons, defaultState };
+})();
+</script>
+</body>
+</html>
