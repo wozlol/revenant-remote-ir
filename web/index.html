@@ -1084,7 +1084,7 @@ async function switchToWifi(ip) {
   if (ok) {
     toast('Connected over Wi-Fi', 'good');
     if (dev && dev.gatt.connected) dev.gatt.disconnect();
-    if (link.bleMode === 'setup') setTimeout(() => { toast('Wi-Fi works, so Bluetooth becomes a keyboard for your Apple TV', 'good'); setBtMode('kb'); }, 1500);
+    if (link.bleMode === 'setup') setTimeout(() => { toast('Wi-Fi works, so Bluetooth is now a keyboard for your Bluetooth host', 'good'); setBtMode('kb'); }, 1500);
   } else {
     link.wifiMsg = 'Revenant joined, but this computer could not reach it. Same network? Bluetooth stays on.';
     toast('Could not reach Revenant over Wi-Fi', 'bad');
@@ -1299,7 +1299,7 @@ function renderBoard() {
     board.append(el);
   }
   $('#boardNote').textContent = ui.map ? 'Map Mode is on. Tap a learned button, or press it on the real remote, then pick what it should send. Revenant does the rest by itself.' : ui.edit ? 'Layout Mode is on. Drag a button to move it, tap one to edit it. Buttons do not send while you edit.'
-    : d.kind === 'kb' ? 'Tap a key to send it over Bluetooth to whatever Revenant is paired with. On the Apple TV open Settings, Remotes And Devices, Bluetooth and pick Revenant Keyboard.'
+    : d.kind === 'kb' ? 'Tap a key to send it over Bluetooth to your Bluetooth host, the device Revenant is paired with. To pair, open Bluetooth settings on that device and pick Revenant Keyboard. On an Apple TV that is Settings, Remotes And Devices, Bluetooth.'
     : (link.mode === 'off' ? 'Connect Revenant, then tap a button to send its code.' : 'Tap a button to send its code out of Revenant.');
   renderInspector();
   renderMapPanel();
@@ -1315,7 +1315,7 @@ async function press(b) {
   const name = (b.label.replace(/[^A-Za-z0-9]+/g, '_') || 'Button').slice(0, 20);
   if (b.out) {
     try { await request(lineFor(b.out), ['SENT']); }
-    catch (e) { toast(/not paired/.test(e.message) ? 'Pair Revenant with the Apple TV first' : 'Send failed: ' + e.message, 'bad'); }
+    catch (e) { toast(/not paired/.test(e.message) ? 'Pair Revenant with your Bluetooth host first' : 'Send failed: ' + e.message, 'bad'); }
     return;
   }
   try { await request('SEND ' + name + ' ' + b.hz + ' ' + b.rep + ' ' + b.gap + ' ' + b.t.join(' '), ['SENT']); }
