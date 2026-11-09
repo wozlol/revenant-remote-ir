@@ -1,7 +1,5 @@
 # Revenant
 
-Live page: https://wozlol.github.io/revenant-remote-ir/
-
 IR Remote Router Relay Repeater & Bluetooth Keyboard Adaptor, on an M5StickS3. It hears IR remotes, sends IR codes, and shows up as a Bluetooth keyboard, media keys and mouse. A web page in Chrome sets it up over Bluetooth.
 
 <p align="center">
@@ -10,6 +8,11 @@ IR Remote Router Relay Repeater & Bluetooth Keyboard Adaptor, on an M5StickS3. I
 </p>
 
 <p align="center">M5StickS3 and the M5 IR Unit. Product photos from <a href="https://docs.m5stack.com/en/core/StickS3">M5Stack</a>.</p>
+
+## Where to use it
+
+- **https://woz.lol/revenant/** works over Bluetooth. Pairing, learning, mapping and updates all work there.
+- **Wi-Fi needs the local copy.** Chrome blocks any https page from talking to Revenant's plain `http` Wi-Fi address, so the link on woz.lol or any other https site stays on Bluetooth. Run `./serve.sh` and open `http://localhost:8090` to get the fast Wi-Fi link and the seconds-long updates.
 
 ## Use the M5 IR module
 
