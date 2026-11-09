@@ -11,8 +11,19 @@ IR Remote Router Relay Repeater & Bluetooth Keyboard Adaptor, on an M5StickS3. I
 
 ## Where to use it
 
-- **https://woz.lol/revenant/** works over Bluetooth. Pairing, learning, mapping and updates all work there.
-- **Wi-Fi needs the local copy.** Chrome blocks any https page from talking to Revenant's plain `http` Wi-Fi address, so the link on woz.lol or any other https site stays on Bluetooth. Run `./serve.sh` and open `http://localhost:8090` to get the fast Wi-Fi link and the seconds-long updates.
+Revenant serves its own web page. Once it is on your Wi-Fi, open **http://revenant.local** in Chrome (or the address on Revenant's screen) and the whole app is there, talking to Revenant over Wi-Fi.
+
+**First time**
+1. Open **https://woz.lol/revenant/** in Chrome. Click Connect Revenant, pick Revenant, and join your Wi-Fi in the Revenant Wi-Fi card. Bluetooth setup only works from a secure page like this one (or `localhost`).
+2. Open **http://revenant.local**. Press the front button on Revenant, then click Connect. The page gets its key from Revenant for two minutes after that press and keeps it.
+
+**Every time after**
+- Open http://revenant.local. It connects by itself. Press the front button and click Connect again only if it says so, for example after Forget Wi-Fi.
+
+**Updates**
+- The page inside Revenant updates with the firmware. In Revenant Firmware click Update. It takes seconds over Wi-Fi.
+
+**Why it works this way:** Chrome blocks a secure (https) page from talking to Revenant's plain `http` address. A page that Revenant serves itself shares that address, so nothing is blocked. The copy on woz.lol is only for Bluetooth setup. If you prefer, run `./serve.sh` and open `http://localhost:8090` for a copy on your computer.
 
 ## Use the M5 IR module
 
@@ -33,9 +44,9 @@ Revenant can send its IR through a Broadlink RM4 mini on your Wi-Fi, so the ligh
 
 ## Build and update the firmware
 
-`./build.sh` compiles and refreshes the update file in `web/firmware/` (`revenant.bin` and `version.json`). That folder is always committed so anyone can update without a compiler. Bump `FW_VERSION` in `super_remote/super_remote.ino` first.
+`./build.sh` first packs `web/index.html` into the firmware (`super_remote/page_gz.h`, generated and committed), so Revenant can serve it. It then compiles and refreshes the update file in `web/firmware/` (`revenant.bin` and `version.json`). That folder is always committed so anyone can update without a compiler. Bump `FW_VERSION` in `super_remote/super_remote.ino` first.
 
-To update Revenant from the web tool, connect it and use Revenant Firmware, then Update. Over Bluetooth it takes several minutes, over Wi-Fi seconds. The page looks in its own folder and in the online repo, offers whichever version is higher, and prefers its own folder on a tie. Settings and pairings stay.
+To update Revenant from the web tool, connect it and use Revenant Firmware, then Update. Over Bluetooth it takes several minutes, over Wi-Fi seconds. The page looks in its own folder and in the online repo, offers whichever version is higher, and prefers its own folder on a tie. A page opened from Revenant itself uses the online repo. Settings and pairings stay.
 
 The first time, or if an update ever fails to start, flash over the cable. Board `m5stack:esp32:m5stack_sticks3`. Hold the power button 3 to 5 seconds for download mode, run `./build.sh flash`, then press the power button once to leave download mode.
 
@@ -47,12 +58,12 @@ One Connect button does the right thing. It tries the saved Wi-Fi address first 
 
 ## Wi-Fi
 
-Join once over Bluetooth: connect Revenant, type the network name and password in Revenant Wi-Fi, click Join Wi-Fi. When Revenant shows its address the page switches to Wi-Fi by itself, remembers the address, and reconnects on every visit with no Bluetooth chooser. Updates then take seconds. Revenant keeps the network for next time, Forget Wi-Fi clears it. Use the local server (`./serve.sh`), a page served over https cannot reach Revenant.
+Join once over Bluetooth: connect Revenant, type the network name and password in Revenant Wi-Fi, click Join Wi-Fi. When Revenant shows its address the page switches to Wi-Fi by itself, remembers the address, and reconnects on every visit with no Bluetooth chooser. Updates then take seconds. Revenant keeps the network for next time, Forget Wi-Fi clears it. Use http://revenant.local or the local server (`./serve.sh`), a page served over https cannot reach Revenant.
 
 ## Security
 
 - Over Bluetooth Revenant ignores everything except HELLO and PING until you press its front button, which opens a two minute window. Someone nearby cannot change settings, send keys or push firmware without touching Revenant.
-- Over Wi-Fi every request needs a secret key. Revenant hands the key out only over Bluetooth, inside that window, and the page keeps it. Only the page at http://localhost:8090 may read answers. Forget Wi-Fi retires the key.
+- Over Wi-Fi every request needs a secret key. Revenant hands the key out only inside that window, over Bluetooth or to the page it serves itself, and the page keeps it. Only the page Revenant serves and the page at http://localhost:8090 may read answers. Forget Wi-Fi retires the key.
 - The Wi-Fi password is stored on Revenant in plain form and is never kept by the page. It travels over Bluetooth during setup without link encryption, so set up Wi-Fi when nobody hostile is within Bluetooth range.
 - Firmware images are not signed. Anyone with the key can flash Revenant.
 
@@ -62,15 +73,15 @@ Hold the button for about a second while learning. The page collects the frames 
 
 ## Revenant buttons
 
-- Front: echo the last heard code
+- Front: echo the last heard code. A press also opens the two minute window for the page at http://revenant.local
 - Right: menu (Brightness, Screen sleep, Wi-Fi on or off, Frame end, Forget All pairings, Close). Choices are saved
 - Power double click: full off
 - Screen sleep turns only the screen off. Lifting Revenant or pressing a button wakes it, and the first press only wakes it. Mapping, Wi-Fi and Bluetooth keep running while it sleeps
 
 ## Use the web tool
 
-1. Run `./serve.sh` and open http://localhost:8090 in Chrome.
-2. Click Connect Revenant and pick Revenant.
+1. Open http://revenant.local, or run `./serve.sh` and open http://localhost:8090 in Chrome.
+2. Click Connect Revenant. Over Bluetooth pick Revenant, over Wi-Fi press the front button first.
 3. Tap a button to send it. Learn Button listens for a real remote. Layout Mode (the grid icon) drags buttons around. Map Mode (the arrows icon) picks what a remote button should send, and Revenant does it on its own after Save To Stick. Turn on Auto Save To Stick to keep every change on Revenant.
 
 ## Pair the Bluetooth keyboard

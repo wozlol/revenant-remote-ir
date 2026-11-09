@@ -18,13 +18,14 @@
 #include <WiFiUdp.h>
 #include "mbedtls/aes.h"
 #include <WebServer.h>
+#include "page_gz.h"
 #include <ESPmDNS.h>
 #include <deque>
 #include "driver/gpio.h"
 #include "soc/gpio_struct.h"
 #include "esp_rom_gpio.h"
 
-#define FW_VERSION "2.8"
+#define FW_VERSION "2.9"
 #define PROTO_VERSION 5
 #define C565(r, g, b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
 
@@ -1833,6 +1834,26 @@ static void wifiRoutes() {
       sendText(404, "not found");
     }
   });
+  // The web page itself, so http://revenant.local opens the app with nothing in between.
+  auto page = []() {
+    server.sendHeader("Content-Encoding", "gzip");
+    server.sendHeader("Cache-Control", "no-cache");
+    server.send_P(200, "text/html", (const char*)PAGE_GZ, PAGE_GZ_LEN);
+  };
+  server.on("/", HTTP_GET, page);
+  server.on("/index.html", HTTP_GET, page);
+  server.on("/favicon.svg", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "max-age=86400");
+    server.send_P(200, "image/svg+xml", (const char*)FAVICON_SVG, FAVICON_SVG_LEN);
+  });
+  // The key goes to this page, and only for two minutes after the front button was pressed. No other web page may read it.
+  server.on("/key", HTTP_GET, []() {
+    String o = server.header("Origin");
+    if (o.length() && o != "http://" + server.hostHeader()) { server.send(403, "text/plain", "ERR origin"); return; }
+    if (!windowOpen()) { server.send(423, "text/plain", "ERR closed"); return; }
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "text/plain", apiKey);
+  });
   server.on("/hello", HTTP_GET, []() {
     if (!guard()) return;
     httpLastPoll = millis();
@@ -2080,9 +2101,15 @@ static void handleButtons() {
     } else if (bleConnected && !windowOpen()) {
       openUntil = millis() + 120000;  // physical press: this is you, not someone nearby
       dirty = true;
-    } else if (cap.valid) {
-      snprintf(lastTxName, sizeof lastTxName, "Echo");
-      irSend(38000, cap.t, cap.n, 1, 0);
+    } else {
+      if (wifiUp && !windowOpen()) {
+        openUntil = millis() + 120000;  // the page opened from Revenant gets its key now
+        dirty = true;
+      }
+      if (cap.valid) {
+        snprintf(lastTxName, sizeof lastTxName, "Echo");
+        irSend(38000, cap.t, cap.n, 1, 0);
+      }
     }
   }
 }

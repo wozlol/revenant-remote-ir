@@ -824,6 +824,8 @@ function request(line, prefixes, ms) {
   });
 }
 let wantLink = true;  // false after the Disconnect button, so it does not reconnect on its own
+// The page opened from Revenant itself, at its own Wi-Fi address. It talks to the same address, so Chrome has nothing to block.
+const SELF = location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 const seenDev = new WeakSet();
 async function openDevice(dev) {
   if (!seenDev.has(dev)) {
@@ -845,7 +847,7 @@ async function openDevice(dev) {
   await afterConnect();
 }
 async function connectBle() {
-  if (!navigator.bluetooth) { toast('This browser has no Web Bluetooth. Use Chrome.', 'bad'); return; }
+  if (!navigator.bluetooth) { toast(SELF ? 'Chrome only allows Bluetooth on secure pages. Revenant is on Wi-Fi, so press its front button and click Connect' : 'This browser has no Web Bluetooth. Use Chrome.', 'bad'); return; }
   try {
     wantLink = true;
     const dev = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Revenant Setup' }, { services: [SVC] }], optionalServices: [SVC] });
@@ -936,8 +938,16 @@ async function wifiFetch(path, opt, ms) {
   const tm = setTimeout(() => ac.abort(), ms || 4000);
   try {
     const o = opt || {};
-    const r = await fetch('http://' + link.addr + path, { ...o, headers: { ...(o.headers || {}), 'X-Revenant-Key': getKey() }, signal: ac.signal });
-    if (r.status === 401) throw new Error('Revenant wants a fresh pairing, connect once over Bluetooth');
+    const go = () => fetch('http://' + link.addr + path, { ...o, headers: { ...(o.headers || {}), 'X-Revenant-Key': getKey() }, signal: ac.signal });
+    let r = await go();
+    if (r.status === 401 && SELF && link.addr === location.host) {
+      // opened from Revenant itself: it hands out its key for two minutes after its front button is pressed
+      const k = await fetch('/key', { cache: 'no-store', signal: ac.signal });
+      const t = (await k.text()).trim();
+      if (k.ok && /^[0-9a-f]{32}$/.test(t)) { setKey(t); r = await go(); }
+      else throw new Error('Press the front button on Revenant, then click Connect');
+    }
+    if (r.status === 401) throw new Error(SELF ? 'Revenant did not accept the key, press its front button and click Connect' : 'Revenant wants a fresh pairing, connect once over Bluetooth');
     return await r.text();
   } finally { clearTimeout(tm); }
 }
@@ -982,8 +992,8 @@ async function autoWifi() {
   try { last = localStorage.getItem('sr-addr') || ''; } catch (e) { /* ignore */ }
   autoBusy = true;
   try {
-    for (const a of [...new Set([last, 'revenant.local'].filter(Boolean))]) { try { await connectWifi(a); return; } catch (e) { /* try the next address */ } }
-    if (last && wantLink) setTimeout(autoWifi, 5000);
+    for (const a of [...new Set([SELF ? location.host : '', last, 'revenant.local'].filter(Boolean))]) { try { await connectWifi(a); return; } catch (e) { /* try the next address */ } }
+    if ((last || (SELF && getKey())) && wantLink) setTimeout(autoWifi, 5000);
   } finally { autoBusy = false; }
 }
 function scanWifi() {
@@ -1712,7 +1722,7 @@ function renderTune() {
 // ============================================================ firmware update
 // The newest build is looked for in two places: the folder this page is served from, and the online repo.
 // Whichever has the higher version wins, and this computer wins a tie, so a build made here beats an older online one.
-const REMOTE_FW = '';  // set to the repo's raw firmware folder, ending with a slash, for example https://raw.githubusercontent.com/NAME/REPO/main/web/firmware/
+const REMOTE_FW = 'https://raw.githubusercontent.com/wozlol/revenant-remote-ir/main/web/firmware/';  // the repo's firmware folder, so a page opened from Revenant or from a server can still offer updates
 const fw = { best: null, checking: false, busy: false };
 function verCmp(a, b) {
   const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
@@ -1994,6 +2004,9 @@ async function connectSmart() {
   $('#btnConnect').textContent = 'Connecting';
   $('#btnConnect').disabled = true;
   try {
+    if (SELF) {
+      try { await connectWifi(location.host); return; } catch (e) { toast(e.message && /front button/.test(e.message) ? e.message : 'Revenant is not answering on Wi-Fi', 'bad'); return; }
+    }
     if (last && location.protocol !== 'https:') {
       for (const a of [...new Set([last, 'revenant.local'])]) { try { await connectWifi(a); return; } catch (e) { /* try the next address */ } }
       toast('Revenant is not answering on Wi-Fi, looking for it over Bluetooth setup', 'bad');
