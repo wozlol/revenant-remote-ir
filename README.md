@@ -1,5 +1,7 @@
 # Revenant
 
+Live page: https://wozlol.github.io/revenant-remote-ir/
+
 IR Remote Router Relay Repeater & Bluetooth Keyboard Adaptor, on an M5StickS3. It hears IR remotes, sends IR codes, and shows up as a Bluetooth keyboard, media keys and mouse. A web page in Chrome sets it up over Bluetooth.
 
 <p align="center">

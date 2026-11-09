@@ -24,7 +24,7 @@
 #include "soc/gpio_struct.h"
 #include "esp_rom_gpio.h"
 
-#define FW_VERSION "2.7"
+#define FW_VERSION "2.8"
 #define PROTO_VERSION 5
 #define C565(r, g, b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
 
@@ -595,7 +595,7 @@ static int frameMatch(const uint16_t* h, uint16_t hn, const uint16_t* r, uint16_
 // ---------- mapping: a heard remote button fires a list of outputs, all on the stick ----------
 
 struct Act {
-  char type;  // I infrared, K keyboard key, C media key, M mouse
+  char type;  // I infrared, K keyboard key, C media key, M mouse, P pause (a = milliseconds)
   uint32_t hz;
   uint8_t rep;
   uint16_t gap;
@@ -613,6 +613,11 @@ struct Rule {
 };
 static std::vector<Rule> rules;
 static volatile int mapPending = -1;
+static int mapRunRule = -1;       // a rule that is partway through its steps, waiting out a pause
+static size_t mapRunNext = 0;
+static uint32_t mapRunAt = 0;
+static bool mapRunOk = true;
+static bool mapRunAfterPause = false;
 static uint32_t mapPendingSince = 0;
 static int mapLastRule = -1;
 static uint32_t mapLastMs = 0;
@@ -625,6 +630,7 @@ static void rulesClear() {
   rules.clear();
   mapPending = -1;
   mapLastRule = -1;
+  mapRunRule = -1;
 }
 
 static uint16_t parseTimes(const char* p, uint16_t* out, uint16_t max) {
@@ -670,7 +676,7 @@ static bool ruleParse(const String& line) {
   r.lastFire = 0;
   r.t = dupTimes(f[2].c_str(), &r.n);
   if (!r.t || r.n < 3) { free(r.t); return false; }
-  for (size_t i = 3; i < f.size() && r.acts.size() < 8; i++) {
+  for (size_t i = 3; i < f.size() && r.acts.size() < 16; i++) {
     Act a = {};
     const char* p = f[i].c_str();
     a.type = *p;
@@ -687,6 +693,10 @@ static bool ruleParse(const String& line) {
       a.b = (int)strtol(p, &e, 10);
     } else if (a.type == 'C') {
       a.a = (int)strtol(p, &e, 10);
+    } else if (a.type == 'P') {
+      a.a = (int)strtol(p, &e, 10);
+      if (a.a < 0) a.a = 0;
+      if (a.a > 5000) a.a = 5000;
     } else if (a.type == 'M') {
       a.a = (int)strtol(p, &e, 10); p = e;
       a.b = (int)strtol(p, &e, 10); p = e;
@@ -1258,7 +1268,39 @@ static bool irSend(uint32_t hz, const uint16_t* t, uint16_t n, uint8_t rep, uint
   return ok;
 }
 
+// Runs the steps of the current rule. A pause step hands control back to the main loop and picks up again when it is over.
+static void mapSteps() {
+  Rule& r = rules[mapRunRule];
+  while (mapRunNext < r.acts.size()) {
+    Act& a = r.acts[mapRunNext++];
+    if (a.type == 'P') {
+      if (mapRunNext >= r.acts.size()) break;  // a pause at the very end does nothing
+      mapRunAt = millis() + (uint32_t)a.a;
+      mapRunAfterPause = true;
+      return;
+    }
+    if (mapRunNext > 1 && !mapRunAfterPause) delay(40);
+    mapRunAfterPause = false;
+    if (a.type == 'I') {
+      uint8_t rep = a.rep < sendRepeats ? sendRepeats : a.rep;
+      uint16_t gap = (rep > 1 && a.gap < 40) ? 40 : a.gap;  // frames need a pause between them
+      if (!irSend(a.hz, a.t, a.n, rep, gap)) mapRunOk = false;
+    }
+    else if (a.type == 'K') { if (kbTap((uint8_t)a.a, (uint8_t)a.b)) txCount++; else mapRunOk = false; }
+    else if (a.type == 'C') { if (consTap((uint16_t)a.a)) txCount++; else mapRunOk = false; }
+    else if (a.type == 'M') { if (mouseSend((uint8_t)a.a, (int8_t)a.b, (int8_t)a.c, (int8_t)a.d)) txCount++; else mapRunOk = false; }
+  }
+  mapLastMs = millis();
+  emit(String("FIRED ") + r.name + (mapRunOk ? "" : " FAILED"));
+  mapRunRule = -1;
+  dirty = true;
+}
+
 static void mapRun() {
+  if (mapRunRule >= 0) {
+    if ((int32_t)(millis() - mapRunAt) >= 0) mapSteps();
+    return;
+  }
   int i = mapPending;
   if (i < 0 || i >= (int)rules.size()) { mapPending = -1; return; }
   // wait until the remote has gone quiet, sending while it still blasts garbles both
@@ -1267,23 +1309,12 @@ static void mapRun() {
   mapPending = -1;
   Rule& r = rules[i];
   r.lastFire = millis();
-  bool allOk = true;
   snprintf(lastTxName, sizeof lastTxName, "%s", r.name);
-  for (size_t k = 0; k < r.acts.size(); k++) {
-    Act& a = r.acts[k];
-    if (k) delay(40);
-    if (a.type == 'I') {
-      uint8_t rep = a.rep < sendRepeats ? sendRepeats : a.rep;
-      uint16_t gap = (rep > 1 && a.gap < 40) ? 40 : a.gap;  // frames need a pause between them
-      if (!irSend(a.hz, a.t, a.n, rep, gap)) allOk = false;
-    }
-    else if (a.type == 'K') { if (kbTap((uint8_t)a.a, (uint8_t)a.b)) txCount++; else allOk = false; }
-    else if (a.type == 'C') { if (consTap((uint16_t)a.a)) txCount++; else allOk = false; }
-    else if (a.type == 'M') { if (mouseSend((uint8_t)a.a, (int8_t)a.b, (int8_t)a.c, (int8_t)a.d)) txCount++; else allOk = false; }
-  }
-  mapLastMs = millis();
-  emit(String("FIRED ") + r.name + (allOk ? "" : " FAILED"));
-  dirty = true;
+  mapRunRule = i;
+  mapRunNext = 0;
+  mapRunOk = true;
+  mapRunAfterPause = false;
+  mapSteps();
 }
 
 // ---------- commands from the web tool ----------

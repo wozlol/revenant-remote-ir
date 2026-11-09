@@ -702,7 +702,7 @@ function validState(o) {
       id: b.id || uid(), label: String(b.label || 'Button'), col: b.col | 0, row: b.row | 0, w: Math.max(1, b.w | 0 || 1), h: Math.max(1, b.h | 0 || 1),
       hz: b.hz || 38000, rep: b.rep || 1, gap: b.gap || 0, t: (b.t || []).map(Number), src: b.src || '', out: b.out && b.out.k ? b.out : undefined,
       m: Array.isArray(b.m) && b.m.length >= 3 ? b.m.map(Number) : undefined,
-      map: b.map && Array.isArray(b.map.to) ? { to: b.map.to.map(String), hold: !!b.map.hold } : undefined,
+      map: b.map && Array.isArray(b.map.to) ? { to: b.map.to.map((e) => (e && typeof e === 'object') ? { p: Math.max(0, Math.min(5000, Math.round(+e.p) || 0)) } : String(e)), hold: !!b.map.hold } : undefined,
     }));
   }
   for (const d of o.devices) if (d.kind === 'kb') for (const b of d.buttons) { if (b.label === 'Escape') b.label = 'Esc'; else if (b.label === 'Backspace') b.label = 'Back Space'; }
@@ -1599,6 +1599,7 @@ function autoPickSource(t, first) {
   if (mm.exact.length) { const x = mm.exact[0]; ui.sel = x.d.id; ui.src = x.b.id; ui.unknown = false; ui.pick = null; renderAll(); return; }
   if (first) { ui.src = null; ui.unknown = true; renderMapPanel(); }
 }
+const MAX_STEPS = 16;
 function renderMapPanel() {
   const box = $('#mapPanel');
   box.innerHTML = '';
@@ -1617,16 +1618,26 @@ function renderMapPanel() {
   const m = src.map;
   const commit = () => { if (!m.to.length) src.map = undefined; persist(); renderBoard(); };
   box.append(h('div', { class: 'mp-title' }, 'When ', h('b', {}, src.label), ' on ' + sx.d.name + ' is pressed, send'));
-  const cur = h('div', { class: 'mp-row' });
-  const have = m.to.filter((id) => idx.has(id));
-  if (!have.length) cur.append(h('span', { class: 'note' }, 'Nothing yet. Pick a device, then tap the buttons it should send.'));
-  for (const id of have) {
-    const x = idx.get(id);
-    cur.append(h('button', { class: 'btn small hot', title: 'Remove', onclick: () => { m.to = m.to.filter((q) => q !== id); commit(); } }, x.b.label + ' · ' + x.d.name + '  ✕'));
+  const isPause = (e) => e && typeof e === 'object';
+  const steps = m.to.map((e, i) => ({ e, i })).filter(({ e }) => isPause(e) || idx.has(e));
+  const cur = h('div', { style: 'display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:8px 0' });
+  if (!steps.length) cur.append(h('span', { class: 'note' }, 'Nothing yet. Pick a device, then tap the buttons it should send.'));
+  const delAt = (i) => { m.to.splice(i, 1); commit(); };
+  let n = 0;
+  for (const { e, i } of steps) {
+    n++;
+    const main = isPause(e)
+      ? h('span', { class: 'btn small', style: 'cursor:default;display:inline-flex;gap:6px;align-items:center' }, n + '. Pause',
+        h('input', { class: 'i', type: 'number', min: 0, max: 5000, step: 10, value: e.p, style: 'width:76px;padding:2px 6px', title: 'Milliseconds from the end of the step before to the start of the next one', onchange: (ev) => { e.p = Math.max(0, Math.min(5000, Math.round(Number(ev.target.value)) || 0)); commit(); } }), 'ms')
+      : h('span', { class: 'btn small hot', style: 'cursor:default' }, n + '. ' + idx.get(e).b.label + ' · ' + idx.get(e).d.name);
+    cur.append(h('span', { style: 'display:inline-flex;gap:3px' }, main,
+      h('button', { class: 'btn small', title: 'Remove this step', onclick: () => delAt(i) }, '✕')));
   }
   box.append(cur);
+  box.append(h('p', { class: 'note', style: 'margin:0' }, 'Steps run from top to bottom, up to ' + MAX_STEPS + '. Tap a button below to add it again, or add a Pause to space two steps apart.'));
   box.append(h('div', { class: 'mp-row' }, h('label', { class: 'switch' + (m.hold ? ' on' : ''), onclick: () => { m.hold = !m.hold; commit(); } }, h('span', { class: 'trk' }), h('span', {}, 'Repeat While Held')),
-    have.length ? h('button', { class: 'btn small', onclick: () => { m.to = []; commit(); } }, 'Clear All') : ''));
+    h('button', { class: 'btn small', onclick: () => { if (m.to.length >= MAX_STEPS) { toast('That is the most steps one button can have (' + MAX_STEPS + ')', 'bad'); return; } m.to.push({ p: 400 }); commit(); } }, 'Add Pause'),
+    steps.length ? h('button', { class: 'btn small', onclick: () => { m.to = []; commit(); } }, 'Clear All') : ''));
   let dd = S.devices.find((d) => d.id === ui.dest) || S.devices.find((d) => d.id !== sx.d.id) || S.devices[0];
   box.append(h('div', { class: 'mp-lab' }, 'Send From'));
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
@@ -1636,7 +1647,7 @@ function renderMapPanel() {
   if (!list.length) chips.append(h('span', { class: 'note' }, 'This device has no buttons yet.'));
   for (const b of list) {
     const on = m.to.includes(b.id);
-    chips.append(h('button', { class: 'btn small' + (on ? ' hot' : ''), onclick: () => { m.to = on ? m.to.filter((q) => q !== b.id) : [...m.to, b.id]; commit(); } }, (on ? '✓ ' : '') + b.label));
+    chips.append(h('button', { class: 'btn small' + (on ? ' hot' : ''), onclick: () => { if (m.to.length >= MAX_STEPS) { toast('That is the most steps one button can have (' + MAX_STEPS + ')', 'bad'); return; } m.to.push(b.id); commit(); } }, b.label));
   }
   box.append(h('div', { class: 'tabbox' }, tabs, chips));
 }
@@ -1651,10 +1662,11 @@ function compileMaps() {
   const idx = destIndex(), lines = [];
   for (const d of S.devices) for (const b of d.buttons) {
     if (!b.map || !b.map.to.length || !b.t || b.t.length < 3) continue;
-    const dests = b.map.to.map((id) => idx.get(id)).filter(Boolean).slice(0, 8);
-    if (!dests.length) continue;
-    const name = dests.map((x) => x.b.label).join('+').replace(/[|\r\n]/g, ' ').slice(0, 22);
-    lines.push('MAPR R|' + name + '|' + (b.map.hold ? 1 : 0) + '|' + (b.m && b.m.length >= 3 ? b.m : b.t).join(' ') + '|' + dests.map((x) => actionFor(x.b)).join('|'));
+    const dests = b.map.to.map((e) => (e && typeof e === 'object') ? { pause: e.p } : idx.get(e)).filter(Boolean).slice(0, MAX_STEPS);
+    const real = dests.filter((x) => x.pause == null);
+    if (!real.length) continue;
+    const name = real.map((x) => x.b.label).join('+').replace(/[|\r\n]/g, ' ').slice(0, 22);
+    lines.push('MAPR R|' + name + '|' + (b.map.hold ? 1 : 0) + '|' + (b.m && b.m.length >= 3 ? b.m : b.t).join(' ') + '|' + dests.map((x) => x.pause != null ? 'P ' + x.pause : actionFor(x.b)).join('|'));
   }
   return lines.slice(0, 64);
 }
