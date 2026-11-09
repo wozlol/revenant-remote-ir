@@ -2,11 +2,22 @@
 
 IR Remote Router Relay Repeater & Bluetooth Keyboard Adaptor, on an M5StickS3. It hears IR remotes, sends IR codes, and shows up as a Bluetooth keyboard, media keys and mouse. A web page in Chrome sets it up over Bluetooth.
 
+<p align="center">
+  <img src="https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/1207/K150-stickS3_main-products_01.webp" alt="M5StickS3" width="380">
+  <img src="https://static-cdn.m5stack.com/resource/docs/products/unit/ir/ir_01.webp" alt="M5 IR Unit" width="380">
+</p>
+
+<p align="center">M5StickS3 and the M5 IR Unit. Product photos from <a href="https://docs.m5stack.com/en/core/StickS3">M5Stack</a>.</p>
+
 ## Use the M5 IR module
 
 **The built-in IR on the stick is flaky when it sends and receives at the same time. Both ways need near-perfect aim. Plug in the M5 IR module and it becomes flawless.** In testing, a Zenith Space Command sent to an Apple TV over Bluetooth and to a Sony receiver over IR with near perfect consistency from any aim.
 
 Plug the M5 IR unit into the Grove port before power-up. Its LED (yellow wire, G9) fires together with the built-in one on every send. Its receiver (white wire, G10) listens together with the built-in one, and the stick keeps whichever capture saw more of the frame. The IR In and IR Out rows on the stick say "Both Ready" when the module was found at boot.
+
+## Broadlink
+
+Revenant can send its IR through a Broadlink RM4 mini on your Wi-Fi, so the light can sit right next to the thing it controls. In the Broadlink app open the device and switch on Unlock. In the Broadlink card on the page, press Find Broadlink or type its address, then choose where IR goes out: Revenant, Broadlink, or Both. The choice covers every button, tapped or mapped. The Broadlink uses its own 38 kHz light, which also works for Sony.
 
 ## Folders
 

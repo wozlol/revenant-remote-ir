@@ -13,7 +13,7 @@ Master remote on an M5StickS3. Hears one remote, sends another. Web tool over Bl
 - Stick: hears IR, sends IR, talks to the web tool over Bluetooth, saves settings to flash. Front button sends the last heard code back out. Right button opens the menu. Power button double click is full off. Silent.
 - Web tool: connect, live monitor with green new and amber same, button grid with drag and drop, learn a button, online code library (Flipper-IRDB), built in Apple Remote Classic, settings save and load (stick, JSON file), demo mode with no stick.
 - Apple Remote Classic uses remote ID 0x8B. An unpaired Apple TV accepts any ID.
-- Library formats the web tool can send: NEC, NECext, Samsung32, SIRC, SIRC15, SIRC20, RC5, raw. Others show as unavailable.
+- Library formats the web tool can send: NEC, NECext, NEC42, NEC42ext, Samsung32, SIRC, SIRC15, SIRC20, RC5, RC5X, RC6, Kaseikyo, RCA, raw. That is every format Flipper-IRDB files use. Library results have a Test Power button that sends the file's power key without adding it.
 
 ## Test order
 

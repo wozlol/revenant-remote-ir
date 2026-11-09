@@ -1,4 +1,4 @@
-// Revenant 2.3, M5StickS3
+// Revenant 2.4, M5StickS3
 // Learn and send IR, driven from the web tool over Bluetooth. Settings live in flash.
 // Front button: send the last heard code back out (echo test). Right button: menu.
 // Power button: double click for full off. Silent by design.
@@ -15,6 +15,8 @@
 #include <BLESecurity.h>
 #include <Update.h>
 #include <WiFi.h>
+#include <WiFiUdp.h>
+#include "mbedtls/aes.h"
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <deque>
@@ -22,7 +24,7 @@
 #include "soc/gpio_struct.h"
 #include "esp_rom_gpio.h"
 
-#define FW_VERSION "2.3"
+#define FW_VERSION "2.7"
 #define PROTO_VERSION 5
 #define C565(r, g, b) ((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))
 
@@ -899,7 +901,322 @@ static bool txInit() {
   return true;
 }
 
+// ---------- Broadlink output (RM4 mini over Wi-Fi) ----------
+// Local protocol as python-broadlink does it: hello, auth, then AES-CBC command packets on UDP port 80.
+// Checked against a real RM4 mini: hello, auth and send all worked from Python with these exact layouts.
+
+static uint8_t blMode = 0;          // 0 this device only, 1 Broadlink only, 2 both
+static String blIp;
+static uint8_t blState = 0;         // 0 off, 1 ready, 2 cannot reach, 3 locked in the Broadlink app
+static uint16_t blType = 0;
+static uint8_t blMac[6];
+static uint8_t blKey[16];
+static uint32_t blId = 0;
+static uint16_t blCount = 0x8000;
+static uint32_t blLastAck = 0;
+static uint32_t blPendingAt = 0;
+static WiFiUDP blUdp;
+static bool blUdpUp = false;
+static uint8_t blOut[1500];
+static uint8_t blPlain[1300];
+static const uint8_t BL_KEY0[16] = {0x09, 0x76, 0x28, 0x34, 0x3f, 0xe9, 0x9e, 0x23, 0x76, 0x5c, 0x15, 0x13, 0xac, 0xcf, 0x8b, 0x02};
+static const uint8_t BL_IV[16] = {0x56, 0x2e, 0x17, 0x99, 0x6d, 0x09, 0x3d, 0x28, 0xdd, 0xb3, 0xba, 0x69, 0x5a, 0x2e, 0x6f, 0x58};
+
+static void blSave() {
+  File f = LittleFS.open("/bl.txt", "w");
+  if (!f) return;
+  f.printf("%d %s\n", blMode, blIp.c_str());
+  f.close();
+}
+
+static void blLoad() {
+  File f = LittleFS.open("/bl.txt", "r");
+  if (!f) return;
+  String l = f.readStringUntil('\n');
+  f.close();
+  l.trim();
+  int sp = l.indexOf(' ');
+  if (sp < 1) return;
+  int m = l.substring(0, sp).toInt();
+  if (m >= 0 && m <= 2) blMode = m;
+  blIp = l.substring(sp + 1);
+  blIp.trim();
+}
+
+// A fresh socket each time we log in, so a Wi-Fi drop and rejoin can never leave a dead one behind.
+static void blSock() {
+  if (blUdpUp) blUdp.stop();
+  blUdp.begin(49321);
+  blUdpUp = true;
+}
+
+static void blDrain() {
+  uint8_t junk[64];
+  while (blUdp.parsePacket() > 0) blUdp.read(junk, sizeof junk);
+}
+
+static size_t blHello(uint8_t* p) {
+  memset(p, 0, 0x30);
+  p[0x0C] = 0xEA; p[0x0D] = 0x07;  // 2026, the device does not check the clock
+  p[0x0F] = 12; p[0x10] = 26; p[0x11] = 7; p[0x12] = 8; p[0x13] = 11;
+  p[0x26] = 6;
+  uint16_t c = 0xBEAF;
+  for (int i = 0; i < 0x30; i++) c += p[i];
+  p[0x20] = c & 0xFF; p[0x21] = c >> 8;
+  return 0x30;
+}
+
+static size_t blBuild(uint16_t cmd, const uint8_t* pl, size_t plen, const uint8_t* key, uint8_t* out) {
+  size_t pad = (plen + 15) & ~(size_t)15;
+  if (pad > sizeof blPlain || 0x38 + pad > sizeof blOut) return 0;
+  memset(out, 0, 0x38);
+  const uint8_t magic[8] = {0x5a, 0xa5, 0xaa, 0x55, 0x5a, 0xa5, 0xaa, 0x55};
+  memcpy(out, magic, 8);
+  out[0x24] = blType & 0xFF; out[0x25] = blType >> 8;
+  out[0x26] = cmd & 0xFF; out[0x27] = cmd >> 8;
+  blCount = ((blCount + 1) | 0x8000) & 0xFFFF;
+  out[0x28] = blCount & 0xFF; out[0x29] = blCount >> 8;
+  memcpy(out + 0x2A, blMac, 6);
+  for (int i = 0; i < 4; i++) out[0x30 + i] = (blId >> (8 * i)) & 0xFF;
+  uint16_t pc = 0xBEAF;
+  for (size_t i = 0; i < plen; i++) pc += pl[i];
+  out[0x34] = pc & 0xFF; out[0x35] = pc >> 8;
+  memcpy(blPlain, pl, plen);
+  memset(blPlain + plen, 0, pad - plen);
+  uint8_t iv[16];
+  memcpy(iv, BL_IV, 16);
+  mbedtls_aes_context ctx;
+  mbedtls_aes_init(&ctx);
+  mbedtls_aes_setkey_enc(&ctx, key, 128);
+  mbedtls_aes_crypt_cbc(&ctx, MBEDTLS_AES_ENCRYPT, pad, iv, blPlain, out + 0x38);
+  mbedtls_aes_free(&ctx);
+  uint16_t ck = 0xBEAF;
+  for (size_t i = 0; i < 0x38 + pad; i++) ck += out[i];
+  out[0x20] = ck & 0xFF; out[0x21] = ck >> 8;
+  return 0x38 + pad;
+}
+
+static int blExchange(const uint8_t* pkt, size_t n, const IPAddress& to, uint8_t* resp, size_t cap, uint32_t waitMs) {
+  blDrain();
+  blUdp.beginPacket(to, 80);
+  blUdp.write(pkt, n);
+  blUdp.endPacket();
+  uint32_t t0 = millis();
+  while (millis() - t0 < waitMs) {
+    int k = blUdp.parsePacket();
+    if (k > 0) return blUdp.read(resp, k < (int)cap ? k : (int)cap);
+    delay(2);
+  }
+  return 0;
+}
+
+static bool blConnect() {
+  blState = 2;
+  if (!wifiUp || !blIp.length()) { blState = 0; return false; }
+  IPAddress ip;
+  if (!ip.fromString(blIp)) return false;
+  blSock();
+  uint8_t pkt[0x60], resp[512];
+  int r = 0;
+  for (int t = 0; t < 3 && r < 0x80; t++) {
+    size_t n = blHello(pkt);
+    r = blExchange(pkt, n, ip, resp, sizeof resp, 700);
+  }
+  if (r < 0x80) return false;
+  blType = resp[0x34] | (resp[0x35] << 8);
+  memcpy(blMac, resp + 0x3A, 6);
+  if (resp[0x7F]) { blState = 3; return false; }
+  uint8_t ap[0x50];
+  memset(ap, 0, sizeof ap);
+  memset(ap + 0x04, 0x31, 16);
+  ap[0x1E] = 1; ap[0x2D] = 1;
+  memcpy(ap + 0x30, "Test 1", 6);
+  blId = 0;
+  size_t n = blBuild(0x65, ap, sizeof ap, BL_KEY0, blOut);
+  r = 0;
+  for (int t = 0; t < 3 && r < 0x48; t++) r = blExchange(blOut, n, ip, resp, sizeof resp, 700);
+  if (r < 0x48 || resp[0x22] || resp[0x23]) return false;
+  size_t len = ((size_t)(r - 0x38) / 16) * 16;
+  uint8_t dec[512];
+  uint8_t iv[16];
+  memcpy(iv, BL_IV, 16);
+  mbedtls_aes_context ctx;
+  mbedtls_aes_init(&ctx);
+  mbedtls_aes_setkey_dec(&ctx, BL_KEY0, 128);
+  mbedtls_aes_crypt_cbc(&ctx, MBEDTLS_AES_DECRYPT, len, iv, resp + 0x38, dec);
+  mbedtls_aes_free(&ctx);
+  blId = dec[0] | (dec[1] << 8) | (dec[2] << 16) | ((uint32_t)dec[3] << 24);
+  memcpy(blKey, dec + 4, 16);
+  blState = 1;
+  blLastAck = millis();
+  return true;
+}
+
+// Our mark and space times become the Broadlink pulse list: 32.84 us ticks, one byte, or 0 then two bytes.
+static size_t blEncode(const uint16_t* t, uint16_t n, uint8_t rep, uint16_t gapMs, uint8_t* out, size_t cap) {
+  size_t o = 4;
+  auto put = [&](uint32_t us) -> bool {
+    uint32_t u = (uint32_t)((uint64_t)us * 100 / 3284);
+    if (u < 1) u = 1;
+    if (u > 65535) u = 65535;
+    if (u < 256) { if (o + 1 > cap) return false; out[o++] = (uint8_t)u; }
+    else { if (o + 3 > cap) return false; out[o++] = 0; out[o++] = u >> 8; out[o++] = u & 0xFF; }
+    return true;
+  };
+  for (uint8_t r = 0; r < rep; r++) {
+    for (uint16_t i = 0; i < n; i++) {
+      uint32_t d = t[i];
+      bool last = (i == n - 1);
+      if (last && (i % 2 == 1)) {  // the closing space doubles as the pause before the next frame
+        uint32_t want = (r + 1 < rep) ? (uint32_t)gapMs * 1000 : 0;
+        if (want > d) d = want;
+      }
+      if (!put(d)) return 0;
+      if (last && (i % 2 == 0)) {  // a frame that ends on a pulse gets a closing space
+        if (!put((r + 1 < rep) ? (gapMs ? (uint32_t)gapMs * 1000 : 5000) : 2000)) return 0;
+      }
+    }
+  }
+  size_t body = o - 4;
+  out[0] = 0x26; out[1] = 0; out[2] = body & 0xFF; out[3] = body >> 8;
+  return o;
+}
+
+// The Broadlink may sit right next to this device, so its own output is not mistaken for a remote being pressed.
+static void blQuiet(const uint16_t* t, uint16_t n, uint8_t rep, uint16_t gapMs) {
+  uint32_t us = 0;
+  for (uint16_t i = 0; i < n; i++) us += t[i];
+  uint32_t ms = (us / 1000 + gapMs) * rep + 250;
+  rxIgnoreUntil = millis() + ms;
+}
+
+static bool blSendIr(const uint16_t* t, uint16_t n, uint8_t rep, uint16_t gapMs) {
+  if (!blIp.length() || !wifiUp || n < 2) return false;
+  IPAddress ip;
+  if (!ip.fromString(blIp)) return false;
+  bool fresh = blState != 1 || millis() - blLastAck > 30000;  // after a quiet spell, check the Broadlink really took it
+  if (blState != 1 && !blConnect()) { emit("BLINK fail"); return false; }
+  static uint8_t ir[1100];
+  size_t irLen = blEncode(t, n, rep, gapMs, ir, sizeof ir);
+  if (!irLen) { emit("BLINK toolong"); return false; }
+  uint8_t pl[1110];
+  size_t plen = irLen + 6;
+  pl[0] = (irLen + 4) & 0xFF; pl[1] = (irLen + 4) >> 8;
+  pl[2] = 2; pl[3] = 0; pl[4] = 0; pl[5] = 0;
+  memcpy(pl + 6, ir, irLen);
+  size_t n2 = blBuild(0x6A, pl, plen, blKey, blOut);
+  if (!n2) return false;
+  uint8_t resp[512];
+  if (fresh) {
+    int r = blExchange(blOut, n2, ip, resp, sizeof resp, 350);
+    if (r < 0x30 || resp[0x22] || resp[0x23]) {  // stale login, log in again once
+      if (!blConnect()) { emit("BLINK fail"); return false; }
+      n2 = blBuild(0x6A, pl, plen, blKey, blOut);
+      r = blExchange(blOut, n2, ip, resp, sizeof resp, 350);
+      if (r < 0x30 || resp[0x22] || resp[0x23]) { blState = 2; emit("BLINK fail"); return false; }
+    }
+    blLastAck = millis();
+    blQuiet(t, n, rep, gapMs);
+    return true;
+  }
+  blDrain();
+  blUdp.beginPacket(ip, 80);
+  blUdp.write(blOut, n2);
+  blUdp.endPacket();
+  blPendingAt = millis();
+  blQuiet(t, n, rep, gapMs);
+  return true;
+}
+
+// Quick sends do not wait for the answer. If it never comes the next send logs in again.
+static uint32_t blRetryAt = 0;
+static void blPoll() {
+  // Log in by ourselves once Wi-Fi is up, and again every minute while the Broadlink is not answering.
+  if (blMode > 0 && blIp.length() && wifiUp && !blPendingAt && (blState == 0 || (blState == 2 && millis() - blRetryAt > 60000))) {
+    blRetryAt = millis();
+    blConnect();
+    emit(String("BL ") + blMode + " " + blIp + " " + blState);
+    return;
+  }
+  if (!blPendingAt) return;
+  int k = blUdp.parsePacket();
+  if (k > 0) {
+    uint8_t resp[128];
+    int r = blUdp.read(resp, k < (int)sizeof resp ? k : (int)sizeof resp);
+    blPendingAt = 0;
+    if (r >= 0x30 && !resp[0x22] && !resp[0x23]) blLastAck = millis();
+    else { blState = 2; emit("BLINK lost"); }
+  } else if (millis() - blPendingAt > 900) {
+    blPendingAt = 0;
+    blState = 2;
+    emit("BLINK lost");
+  }
+}
+
+static void blFind() {
+  if (!wifiUp) { bleSend("BLFOUND none"); return; }
+  blSock();
+  uint8_t pkt[0x30];
+  size_t n = blHello(pkt);
+  blDrain();
+  IPAddress bc = WiFi.broadcastIP();
+  for (int t = 0; t < 2; t++) {
+    blUdp.beginPacket(bc, 80);
+    blUdp.write(pkt, n);
+    blUdp.endPacket();
+    delay(30);
+  }
+  uint32_t t0 = millis();
+  String seen;
+  int found = 0;
+  while (millis() - t0 < 2500) {
+    int k = blUdp.parsePacket();
+    if (k >= 0x80) {
+      uint8_t resp[256];
+      int r = blUdp.read(resp, k < (int)sizeof resp ? k : (int)sizeof resp);
+      String ip = blUdp.remoteIP().toString();
+      if (r >= 0x80 && seen.indexOf(ip) < 0) {
+        seen += ip + " ";
+        char name[33];
+        int ni = 0;
+        for (int i = 0x40; i < r && ni < 32 && resp[i]; i++) name[ni++] = (resp[i] >= 32 && resp[i] < 127) ? resp[i] : '_';
+        name[ni] = 0;
+        bleSend(String("BLFOUND ") + ip + " " + name);
+        found++;
+      }
+    } else if (k > 0) {
+      uint8_t junk[64];
+      blUdp.read(junk, sizeof junk);
+    }
+    delay(5);
+  }
+  if (!found) bleSend("BLFOUND none");
+}
+
+static void blSet(const String& l) {  // BL <mode> <ip>
+  int m = 0;
+  char ipb[40] = "";
+  int got = sscanf(l.c_str() + 2, "%d %39s", &m, ipb);
+  if (got < 1 || m < 0 || m > 2) { bleSend("ERR bl"); return; }
+  String ip = got >= 2 ? String(ipb) : blIp;
+  IPAddress test;
+  if (m > 0 && !test.fromString(ip)) { bleSend("ERR bl address"); return; }
+  blMode = m;
+  blIp = ip;
+  blSave();
+  blState = 0;
+  if (blMode > 0) blConnect();
+  bleSend(String("BL ") + blMode + " " + blIp + " " + blState);
+}
+
 static bool irSend(uint32_t hz, const uint16_t* t, uint16_t n, uint8_t rep, uint16_t gapMs) {
+  if (blMode > 0) {
+    bool ok = blSendIr(t, n, rep, gapMs);
+    if (blMode == 1) {
+      if (ok) { txCount++; dirty = true; }
+      return ok;
+    }
+  }
   if (!txUp || n < 2) return false;
   static uint8_t dutyApplied = 0;
   if (hz != txCarrier || txDuty != dutyApplied) {
@@ -1141,7 +1458,7 @@ static void handleLine(String& l) {
     if ((int32_t)(openUntil - (millis() + 120000)) < 0) openUntil = millis() + 120000;
   }
   if (l.startsWith("HELLO")) {
-    bleSend(String("HELLO super-remote ") + FW_VERSION + " p" + PROTO_VERSION + " bat=" + batt + " in=" + (rxUp ? 1 : 0) + " out=" + (txUp ? 1 : 0) + " in2=" + (rx2Up ? 1 : 0) + " out2=" + (tx2Up ? 1 : 0) + " src=" + srcWins[0] + "," + srcWins[1] + " kb=" + (kbConnected ? 1 : 0) + " ota=1 map=1 ble=" + (bleKbMode ? "kb" : "setup") + " tune=" + tolAbs + "," + tolPct + "," + (prefixOn ? 1 : 0) + "," + minMarkUs + "," + gapIdx + "," + shapeTol + "," + sendWaitMs + "," + sendRepeats + "," + txDuty + " wifion=" + (wifiOn ? 1 : 0) + " lock=1 open=" + (windowOpen() ? 1 : 0) + " wifi=" + (wifiUp ? wifiIp : String("0")) + " rules=" + rules.size());
+    bleSend(String("HELLO super-remote ") + FW_VERSION + " p" + PROTO_VERSION + " bat=" + batt + " in=" + (rxUp ? 1 : 0) + " out=" + (txUp ? 1 : 0) + " in2=" + (rx2Up ? 1 : 0) + " out2=" + (tx2Up ? 1 : 0) + " src=" + srcWins[0] + "," + srcWins[1] + " kb=" + (kbConnected ? 1 : 0) + " ota=1 map=1 ble=" + (bleKbMode ? "kb" : "setup") + " tune=" + tolAbs + "," + tolPct + "," + (prefixOn ? 1 : 0) + "," + minMarkUs + "," + gapIdx + "," + shapeTol + "," + sendWaitMs + "," + sendRepeats + "," + txDuty + " bl=" + blMode + "," + (blIp.length() ? blIp : String("-")) + "," + blState + " wifion=" + (wifiOn ? 1 : 0) + " lock=1 open=" + (windowOpen() ? 1 : 0) + " wifi=" + (wifiUp ? wifiIp : String("0")) + " rules=" + rules.size());
   } else if (l.startsWith("SEND ")) {
     cmdSend(l);
   } else if (l.startsWith("KEY ") || l.startsWith("CONS ") || l.startsWith("MOUSE ")) {
@@ -1169,6 +1486,10 @@ static void handleLine(String& l) {
     }
   } else if (l == "TOKEN") {
     bleSend(viaBle ? String("TOKEN ") + apiKey : String("ERR no"));
+  } else if (l == "BLFIND") {
+    blFind();
+  } else if (l.startsWith("BL ")) {
+    blSet(l);
   } else if (l == "WIFISCAN") {
     wifiScan();
   } else if (l == "WIFIOFF") {
@@ -1269,7 +1590,7 @@ static void drawMain() {
     snprintf(b, sizeof b, "Total %lu", (unsigned long)txCount);
     txt(2, 196, 1, C_DIM, b);
   }
-  txt(2, H - 12, 1, C_DIM, "Front Echo Right Menu");
+  txt(2, H - 21, 1, C_DIM, "Front Echo Right Menu");
 }
 
 static void drawMenu() {
@@ -1283,7 +1604,7 @@ static void drawMenu() {
     txt(6, y, 1, C_DIM, labels[i]);
     txt(6, y + 9, 2, col, values[i]);
   }
-  txt(2, H - 12, 1, C_DIM, "Right Next Front Pick");
+  txt(2, H - 21, 1, C_DIM, "Right Next Front Pick");
 }
 
 static void drawOta() {
@@ -1306,12 +1627,24 @@ static void drawOta() {
   txt(2, 146, 1, C_DIM, otaDoneMs ? "Restarting" : "Do not unplug");
 }
 
+// Bottom band: the loading bar colours run backwards, magenta to cyan, with black text on top.
+static void drawBand() {
+  const int by = H - 11;
+  for (int x = 0; x < W; x++) {
+    int r = 255 + (25 - 255) * x / (W - 1);
+    int g = 43 + (242 - 43) * x / (W - 1);
+    int bl = 214 + (255 - 214) * x / (W - 1);
+    cv.drawFastVLine(x, by, 11, C565(r, g, bl));
+  }
+  txt((W - 7 * 6) / 2, by + 2, 1, TFT_BLACK, "woz.lol");
+}
+
 static void render() {
   cv.fillSprite(TFT_BLACK);
   cv.setFont(&fonts::Font0);
   if (otaActive || otaShow || otaDoneMs) drawOta();
-  else if (menuOpen) drawMenu();
-  else drawMain();
+  else if (menuOpen) { drawMenu(); drawBand(); }
+  else { drawMain(); drawBand(); }
   cv.pushSprite(0, 0);
 }
 
@@ -1774,6 +2107,7 @@ void setup() {
   lastActMs = millis();
   rulesLoad();
   keyLoad();
+  blLoad();
   wifiRoutes();
   if (wifiSsid.length() && wifiOn) wifiBegin();
   stage = 8;
@@ -1797,6 +2131,7 @@ void loop() {
   }
   pollCommands();
   wifiPoll();
+  blPoll();
   otaPump();
   if (otaDoneMs && millis() - otaDoneMs > 1500) ESP.restart();
   if (restartAt && (int32_t)(millis() - restartAt) > 0) ESP.restart();

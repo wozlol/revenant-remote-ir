@@ -69,6 +69,11 @@ input, select { font: inherit; color: var(--text); }
   background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%); }
 
 /* ---------- layout ---------- */
+.foot { position: relative; z-index: 2; margin-top: 8px; padding: 10px 16px; text-align: center; color: #000; font-weight: 700; letter-spacing: .12em;
+  background: linear-gradient(90deg, #ff2bd6, #19f2ff); box-shadow: 0 0 18px rgba(255, 43, 214, 0.45), 0 0 18px rgba(25, 242, 255, 0.35); }
+.foot a { color: #000; text-decoration: none; }
+.foot a:hover, .foot a:focus-visible { text-decoration: underline; }
+.foot .sep { opacity: .55; margin: 0 .5em; }
 .wrap { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; padding: 22px 20px 60px; }
 header.top { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; margin-bottom: 20px; }
 .logo { margin: 0; font-weight: 800; font-size: clamp(30px, 5vw, 50px); letter-spacing: 0.2em; text-transform: uppercase; line-height: 1;
@@ -299,6 +304,19 @@ canvas#wave { width: 100%; height: 54px; display: block; border-radius: 10px; ba
         </div>
         <p class="note" id="wifiNote" style="margin:10px 0 0"></p>
       </section>
+      <section class="glass" id="blCard">
+        <h2>Broadlink</h2>
+        <p class="note" style="margin:0 0 10px">Send IR through a Broadlink RM on your Wi-Fi, so it can sit right next to the thing it controls. In the Broadlink app, open the device and switch on Unlock.</p>
+        <div class="stack">
+          <label class="f">Send IR Out Of
+            <select class="i" id="blMode"><option value="0">Revenant</option><option value="1">Broadlink</option><option value="2">Both</option></select>
+          </label>
+          <input class="i" id="blIp" placeholder="Broadlink Address" autocomplete="off" inputmode="decimal" style="width:100%">
+          <button class="btn small" id="btnBlFind" style="width:100%">Find Broadlink</button>
+          <div id="blList" class="stack"></div>
+        </div>
+        <p class="note" id="blNote" style="margin:10px 0 0"></p>
+      </section>
       <section class="glass" id="fwCard">
         <h2>Revenant Firmware</h2>
         <div class="kv" id="fwInfo"></div>
@@ -351,10 +369,12 @@ canvas#wave { width: 100%; height: 54px; display: block; border-radius: 10px; ba
     </div>
   </div>
 </div>
+<div class="foot">&copy; <span id="footYear"></span> <a href="https://woz.lol" target="_blank" rel="noopener">woz.lol</a> <span class="sep">/</span> <a href="https://github.com/wozlol/revenant-remote-ir" target="_blank" rel="noopener">Revenant Remote IR on GitHub</a></div>
 <div id="toasts"></div>
 
 <script>
 (() => {
+  document.getElementById('footYear').textContent = new Date().getFullYear();
 'use strict';
 
 // ============================================================ helpers
@@ -420,6 +440,36 @@ function rc5(addr, cmd) {
   if (t.length % 2 === 0) t.pop();
   return { hz: 36000, t, rep: 1, gap: 0 };
 }
+// RC6 mode 0 (Philips and many media centers). Leader, start bit, 3 mode bits, a double wide toggle bit, 8 address bits, 8 command bits. A 1 is mark then space.
+function rc6(addr, cmd) {
+  const runs = [[1, 2666], [0, 889]];
+  const bit = (b, u) => { runs.push(b ? [1, u] : [0, u]); runs.push(b ? [0, u] : [1, u]); };
+  bit(1, 444);
+  for (let i = 0; i < 3; i++) bit(0, 444);
+  bit(0, 888);
+  for (const b of bitsMSB(addr & 255, 8)) bit(b, 444);
+  for (const b of bitsMSB(cmd & 255, 8)) bit(b, 444);
+  const t = [];
+  let lvl = 1;
+  for (const [l, d] of runs) { if (l === lvl && t.length) t[t.length - 1] += d; else { t.push(d); lvl = l; } }
+  if (t.length % 2 === 0) t.pop();
+  return { hz: 36000, t, rep: 1, gap: 0 };
+}
+// NEC42 and NEC42ext, Kaseikyo (Panasonic and family) and RCA, built the way Flipper's own encoders build them.
+const leVal = (a, n) => { let v = 0; for (let i = 0; i < n; i++) v += (a[i] || 0) * Math.pow(2, 8 * i); return v; };
+const nec42 = (bits) => ({ hz: 38000, t: pulseDist([9000, 4500], bits, 560, 560, 1690), rep: 1, gap: 0 });
+function kaseikyo(addr, cmd) {
+  const id = Math.floor(addr / 16777216) & 3, vendor = Math.floor(addr / 256) & 0xffff, g1 = Math.floor(addr / 16) & 15, g2 = addr & 15;
+  const d0 = vendor & 255, d1 = vendor >> 8;
+  let vp = d0 ^ d1; vp = (vp & 15) ^ (vp >> 4);
+  const c = cmd & 0x3ff;
+  const d2 = (vp & 15) | (g1 << 4), d3 = g2 | ((c & 15) << 4), d4 = (id << 6) | (c >> 4);
+  return { hz: 37000, t: pulseDist([3456, 1728], bitsLSB([d0, d1, d2, d3, d4, d2 ^ d3 ^ d4]), 432, 432, 1296), rep: 1, gap: 0 };
+}
+function rca(addr, cmd) {
+  const bits = [...bitsN(addr & 15, 4), ...bitsN(cmd & 255, 8), ...bitsN(~addr & 15, 4), ...bitsN(~cmd & 255, 8)];
+  return { hz: 38000, t: pulseDist([4000, 4000], bits, 500, 1000, 2000), rep: 1, gap: 0 };
+}
 const hexBytes = (s) => String(s || '').trim().split(/\s+/).filter(Boolean).map((x) => parseInt(x, 16));
 function fromParsed(e) {
   const a = hexBytes(e.address), c = hexBytes(e.command);
@@ -432,6 +482,11 @@ function fromParsed(e) {
     case 'SIRC15': return sirc([...bitsN(c[0], 7), ...bitsN(a[0], 8)]);
     case 'SIRC20': return sirc([...bitsN(c[0], 7), ...bitsN(a[0] | ((a[1] || 0) << 8), 13)]);
     case 'RC5': case 'RC5X': return rc5(a[0], c[0]);
+    case 'RC6': return rc6(a[0], c[0]);
+    case 'NEC42': { const ad = leVal(a, 2) & 0x1fff; return nec42([...bitsN(ad, 13), ...bitsN(~ad & 0x1fff, 13), ...bitsN(c[0], 8), ...bitsN(~c[0] & 255, 8)]); }
+    case 'NEC42ext': return nec42([...bitsN(leVal(a, 4) % 67108864, 26), ...bitsN(leVal(c, 2), 16)]);
+    case 'Kaseikyo': return kaseikyo(leVal(a, 4), leVal(c, 2));
+    case 'RCA': return rca(a[0], c[0]);
     default: return null;
   }
 }
@@ -472,6 +527,7 @@ function guess(t) {
   if (near(m, 9000) && near(s, 4500)) return { name: 'NEC', bits: (t.length - 3) / 2 };
   if (near(m, 9000) && near(s, 2250)) return { name: 'NEC Repeat', bits: null };
   if (near(m, 4500) && near(s, 4500)) return { name: 'Samsung', bits: (t.length - 3) / 2 };
+  if (near(m, 2666) && near(s, 889)) return { name: 'RC6', bits: null };
   if (near(m, 3456) && near(s, 1728)) return { name: 'Panasonic', bits: (t.length - 3) / 2 };
   if (near(m, 2400) && near(s, 600)) return { name: 'Sony', bits: (t.length - 1) / 2 };
   if (near(m, 8400) && near(s, 4200)) return { name: 'JVC', bits: (t.length - 3) / 2 };
@@ -709,6 +765,9 @@ function onLine(line) {
   if (line === 'LOCKED') { link.open = false; renderSync(); return; }
   if (line.startsWith('WIFINET ')) { const [r, sec, ...nm] = line.slice(8).split('|'); link.nets.push({ rssi: parseInt(r, 10), sec: sec === '1', name: nm.join('|') }); return; }
   if (line.startsWith('WIFIEND')) { link.scanning = false; renderWifi(); return; }
+  if (line.startsWith('BLFOUND ')) { const [ip, ...nm] = line.slice(8).trim().split(' '); if (ip === 'none') { link.blFound = []; link.blBusy = false; renderBl(); return; } link.blFound.push({ ip, name: nm.join(' ') }); link.blBusy = false; renderBl(); return; }
+  if (line.startsWith('BL ')) { const p = line.trim().split(' '); link.bl = { mode: +p[1], ip: p[2] || '', state: +p[3] }; link.blBusy = false; renderBl(); return; }
+  if (line.startsWith('BLINK ')) { if (link.bl) link.bl.state = 2; renderBl(); toast(line.includes('toolong') ? 'That button is too long to send through the Broadlink' : 'Revenant could not reach the Broadlink', 'bad'); return; }
   if (line.startsWith('WIFI ')) {
     const p = line.trim().split(' ');
     if (p[1] === 'up') { link.wifi = p[2] || ''; link.wifiMsg = ''; link.changing = false; renderWifi(); if (link.mode === 'ble' && link.wifi) switchToWifi(link.wifi); }
@@ -829,6 +888,7 @@ async function afterConnect() {
     link.lock = /\block=1\b/.test(hello);
     link.open = /\bopen=1\b/.test(hello);
     { const m = hello.match(/\bwifi=(\S+)/); link.wifi = m && m[1] !== '0' ? m[1] : ''; }
+    { const m = hello.match(/\bbl=(\d),(\S+),(\d)/); link.bl = m ? { mode: +m[1], ip: m[2] === '-' ? '' : m[2], state: +m[3] } : null; }
     link.locked = link.mode === 'ble' && link.lock && !link.open;
     checkFirmware();
     renderLink();
@@ -931,6 +991,38 @@ function scanWifi() {
   link.nets = []; link.scanning = true; renderWifi();
   writeLine('WIFISCAN').catch((e) => { link.scanning = false; renderWifi(); toast('Search failed: ' + e.message, 'bad'); });
   setTimeout(() => { if (link.scanning) { link.scanning = false; renderWifi(); } }, 15000);
+}
+function renderBl() {
+  const card = $('#blCard');
+  if (!card) return;
+  const on = isLive() && !!link.bl;
+  const b = link.bl || { mode: 0, ip: '', state: 0 };
+  for (const id of ['#blMode', '#blIp', '#btnBlFind']) $(id).disabled = !on;
+  $('#blMode').value = String(b.mode);
+  if (document.activeElement !== $('#blIp')) $('#blIp').value = b.ip;
+  $('#btnBlFind').textContent = link.blBusy ? 'Searching' : 'Find Broadlink';
+  const list = $('#blList');
+  list.innerHTML = '';
+  for (const f of link.blFound || []) list.append(h('button', { class: 'btn small', onclick: () => { $('#blIp').value = f.ip; setBl(Math.max(1, +$('#blMode').value)); } }, f.ip + (f.name ? '  ' + f.name : '')));
+  $('#blNote').textContent = !isLive() ? 'Connect Revenant first.'
+    : !link.bl ? 'Update Revenant to use this.'
+    : b.mode === 0 ? 'Off. Revenant sends IR from its own light.'
+    : b.state === 1 ? 'Ready. ' + (b.mode === 1 ? 'IR goes out of the Broadlink only.' : 'IR goes out of both.')
+    : b.state === 0 ? 'Connecting to the Broadlink.'
+    : b.state === 3 ? 'The Broadlink is locked. Open it in the Broadlink app and switch on Unlock.'
+    : 'Cannot reach the Broadlink. Check the address and that it is on the same Wi-Fi.';
+}
+function setBl(mode) {
+  const ip = $('#blIp').value.trim();
+  if (mode > 0 && !ip) { toast('Enter the Broadlink address, or press Find Broadlink', 'bad'); renderBl(); return; }
+  link.blBusy = true;
+  writeLine('BL ' + mode + (ip ? ' ' + ip : '')).catch((e) => { link.blBusy = false; toast('Could not save that: ' + e.message, 'bad'); });
+}
+function findBl() {
+  if (!isLive()) return;
+  link.blFound = []; link.blBusy = true; renderBl();
+  writeLine('BLFIND').catch((e) => { link.blBusy = false; renderBl(); toast('Search failed: ' + e.message, 'bad'); });
+  setTimeout(() => { if (link.blBusy) { link.blBusy = false; renderBl(); } }, 6000);
 }
 function renderWifi() {
   const card = $('#wifiCard');
@@ -1147,6 +1239,7 @@ function renderLink() {
   renderMonitor();
   renderFw();
   renderWifi();
+  renderBl();
 }
 function renderSync() {
   const el = $('#sync');
@@ -1798,6 +1891,12 @@ function libShow(path, items) {
       addButtons(d, ok.filter((i) => i.on).map((i) => mkButton(i.label, i.code, 0, 0, src)));
       persist(); renderAll(); toast('Added to ' + d.name, 'good');
     } }, 'Add To ' + (cur() ? cur().name : 'Device')),
+    h('button', { class: 'btn small', onclick: () => {
+      const rank = (l) => /^power$/i.test(l) ? 0 : /^(power (on off|toggle)|on off|standby|pwr)$/i.test(l) ? 1 : /power|standby|pwr/i.test(l) ? 2 : 9;
+      const pick = ok.slice().sort((x, y) => rank(x.label) - rank(y.label))[0];
+      if (!pick || rank(pick.label) === 9) { toast('No power button in this file', 'bad'); return; }
+      press(mkButton(pick.label, pick.code, 0, 0, ''));
+    } }, 'Test Power'),
     h('label', { class: 'switch', style: 'text-transform:none;letter-spacing:.04em' }, replace, 'Replace Existing')));
 }
 // Every Apple code in the public Flipper-IRDB, grouped by the remote it came from. The second command byte is the remote ID.
@@ -1935,6 +2034,9 @@ $('#autoSwitch').addEventListener('click', () => {
   if (autoSave && link.mode !== 'off' && stickJson !== asciiJson(S)) saveStick(true);
 });
 $('#btnLoadStick').addEventListener('click', loadStick);
+$('#blMode').addEventListener('change', (e) => setBl(+e.target.value));
+$('#blIp').addEventListener('change', () => { const m = link.bl ? link.bl.mode : 0; if (m > 0) setBl(m); });
+$('#btnBlFind').addEventListener('click', findBl);
 $('#btnDownload').addEventListener('click', download);
 $('#btnUpload').addEventListener('click', () => $('#fileIn').click());
 $('#fileIn').addEventListener('change', (e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; });
